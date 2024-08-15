@@ -1,0 +1,144 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<head> 
+    <title>minipilot</title> 
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="stylesheet" th:href="@{/css/bubble.css}">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+</head>
+<body>
+    <div id="wrapper">
+        <section>
+			<div th:replace="fragments/header :: headerFragment"></div>
+            <div class="container mt-6 mb-6" style="padding-left:20px; padding-right:20px;">
+            
+			<div class='container pb-2 px-5' xmlns="http://www.w3.org/1999/html">
+			    <div class="columns">
+			        <div class="column"></div>
+			        <div class="column is-two-thirds">
+			            <h1 id="name" class="title is-4 pb-3">Data</h1>
+			            <div class="bubble">
+			            <h2 class="title is-5">Files</h2>
+			            <form id="upload" class="mb-4" method="post" th:action="@{/data/upload}" enctype="multipart/form-data">
+			                <div class="field has-addons">
+			                    <div class="control is-expanded">
+			                        <div id="file-upload" class="file has-name is-fullwidth mb-3">
+			                            <label class="file-label">
+			                                <input class="file-input" type="file" name="asset">
+			                                <span class="file-cta">
+			                                    <span class="file-label">
+			                                        Upload a CSV file
+			                                    </span>
+			                                </span>
+			                                <span class="file-name">
+			                                </span>
+			                            </label>
+			                        </div>
+			                    </div>
+			                    <div class="control">
+			                        <button type="submit" class="button redis-yellow">Submit</button>
+			                    </div>
+			                </div>
+			            </form>
+			
+			            <div>
+			                <div th:if="${not #lists.isEmpty(data)}">
+				                <table class="table is-fullwidth is-hoverable">
+				                    <colgroup>
+				                        <col style="width: 150px;">
+				                        <col>
+				                    </colgroup>
+				                    <thead>
+				                    <tr>
+				                        <th>Data</th>
+				                        <th>Index</th>
+				                        <th>File</th>
+				                    </tr>
+				                    </thead>
+				                    <tbody>
+				                    <tr th:each="doc : ${data}">
+				                        <td style="word-wrap:break-word; word-break:break-all; white-space:normal; width:70%;">
+				                            <a href="{{ url_for('serve_file', filename=asset.filename, _external=True) }}" target="_blank">
+				                                <span th:text="${doc.get('filename')}"></span>
+				                            </a>
+				                        </td>
+				                        <td>
+				                            <a class="create_idx_anchor" style="display:block;" th:href="@{/data/create/{id}(id=${doc.get('id')})}">
+				                                create
+				                            </a>
+				                        </td>
+				                        <td>
+				                            <a style="display:block;" th:href="@{/data/remove/{id}(id=${doc.get('id')})}">
+				                                delete
+				                            </a>
+				                        </td>
+				                    </tr>
+				                    </tbody>
+				                </table>
+				            </div>
+				            <div th:if="${#lists.isEmpty(data)}">
+			                	<p>There is no stored asset</p>
+			                </div>
+			            </div>
+			            </div>
+			
+			            <div class="bubble">
+			                <h2 class="title is-5">Semantic indexes</h2>
+			                <table th:if="${not #lists.isEmpty(idx_overview)}" class="table is-fullwidth is-hoverable">
+			                    <thead>
+			                    <tr>
+			                        <th>Index</th>
+			                        <th>Current</th>
+			                        <th>Docs</th>
+			                        <th>Actions</th>
+			                    </tr>
+			                    </thead>
+			                    <tbody>
+			                    <tr th:each="idx : ${idx_overview}">
+			                        <td style="word-wrap: break-word; word-break: break-all; white-space: normal; width:70%">
+			                            <span th:text="${idx.get('name')}"></span>
+			                        </td>
+			                        <td>
+			                            <span th:if="${idx.get('is_current')}">&#10004;</span>
+			                        </td>
+			                        <td>
+			                            <span th:text="${idx.get('docs')}"></span>
+			                        </td>
+			                        <td>
+			                            <div th:if="${!idx.get('is_current')}">
+			                            <a class="mr-5" th:href="@{/data/current/{name}(name=${idx.get('name')})}">
+			                                Make current
+			                            </a>
+			                            <a class="delete_idx_anchor" th:href="@{/data/delete/{name}(name=${idx.get('name')})}">
+			                                Delete
+			                            </a>
+			                            </div>
+			                        </td>
+			                    </tr>
+			                    </tbody>
+			                </table>
+				            <p th:if="${#lists.isEmpty(idx_overview)}">
+			                	You have no semantic index, upload a CSV data source and create the index
+			                </p>
+			            </div>
+	
+			        </div>
+			        <div class="column"></div>
+			    </div>
+
+            </div>
+        </section>
+    </div>
+        <script>
+        const fileInput = document.querySelector("#file-upload input[type=file]");
+        fileInput.onchange = () => {
+            if (fileInput.files.length > 0) {
+                const fileName = document.querySelector("#file-upload .file-name");
+                fileName.textContent = fileInput.files[0].name;
+            }
+        };
+        </script>
+</body>
+</html>
