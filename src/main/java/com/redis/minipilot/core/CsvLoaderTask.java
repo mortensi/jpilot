@@ -35,7 +35,7 @@ public class CsvLoaderTask {
 
 
     public static void csvLoaderTask(String filename) {
-    	UnifiedJedis conn = new UnifiedJedis(new HostAndPort("localhost", 6399));
+    	UnifiedJedis conn = new UnifiedJedis(new HostAndPort("localhost", 6379));
     	System.out.println("Loading CSV with LangChain4J");
     	
         // Check if alias exists for semantic search
@@ -65,7 +65,7 @@ public class CsvLoaderTask {
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
                 .host("localhost")
                 .user("default")
-                .port(6399)
+                .port(6379)
                 .indexName(indexName)
                 .dimension(1536)
                 //.metadataFieldsName(metadata)

@@ -53,7 +53,7 @@ public class DataController {
 	
 	@GetMapping("/data")
 	public String data(@RequestParam(name="name", required=false, defaultValue="data") String name, Model model) {			
-		UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+		UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
 		
 		// Check the CSV files
 		Query q = new Query("*");
@@ -143,7 +143,7 @@ public class DataController {
                 // Here you would add logic to save the file metadata to your database
                 String key = "minipilot:data:" + UUID.randomUUID().toString().replace("-", "");
                 
-                UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+                UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
                 unifiedjedis.hset(key, "filename", filename);
                 unifiedjedis.hset(key, "uploaded", String.valueOf(Instant.now().getEpochSecond()));
 
@@ -161,7 +161,7 @@ public class DataController {
     @GetMapping("/data/create/{id}")
     public RedirectView createIndex(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
         // Get filename from database
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
         String filename = unifiedjedis.hget("minipilot:data:" + id, "filename");
         
         System.out.println(filename);
@@ -174,10 +174,10 @@ public class DataController {
         //processFileAsync(path);
         
         // Use the utility method to process the file asynchronously
-        fileProcessingUtils.processFileAsync(path);
+        //fileProcessingUtils.processFileAsync(path);
 
         // Or use the utility method to process the file synchronously, for debugging
-        //CsvLoaderTask.csvLoaderTask(path);
+        CsvLoaderTask.csvLoaderTask(path);
         
         // Wait for a second to simulate the original behavior (not recommended in production)
         try {
@@ -194,7 +194,7 @@ public class DataController {
     
     @GetMapping("/data/remove/{id}")
     public RedirectView removeFile(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
         String filename = unifiedjedis.hget("minipilot:data:" + id, "filename");
 
         // Construct the file path
@@ -216,7 +216,7 @@ public class DataController {
     
     @GetMapping("/data/delete/{name}")
     public RedirectView deleteIndex(@PathVariable("name") String name, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
         
     	unifiedjedis.ftDropIndexDD(name);
 
@@ -228,7 +228,7 @@ public class DataController {
     
     @GetMapping("/data/current/{name}")
     public RedirectView currentIndex(@PathVariable("name") String name, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
     	
     	unifiedjedis.ftAliasUpdate("minipilot_rag_alias", name);
 

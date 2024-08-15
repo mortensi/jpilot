@@ -55,7 +55,7 @@ public class MinipilotApplication implements ApplicationRunner {
 	public void run(ApplicationArguments args) throws Exception {
 		fs.init();
 		
-		UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6399));
+		UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
 		
 		if (!unifiedjedis.ftList().contains("minipilot_data_idx")){
 			Schema schema = new Schema().addTextField("description", 1.0).addTagField("filename").addNumericField("uploaded");

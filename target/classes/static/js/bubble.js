@@ -25,9 +25,10 @@ function bubbles(endpoint, history, callback=undefined){
         $.ajax({
             type: "POST",
             dataType: "text",
+            contentType: "application/x-www-form-urlencoded; charset=UTF-8",
             url: endpoint,
-            data : {q: encodeURIComponent(q)},
-            processData: true,
+            data: $.param({ q: q }),
+            processData: false,
             xhrFields: {
                 // Getting on progress streaming response
                 onprogress: function(e)

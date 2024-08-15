@@ -70,12 +70,21 @@
 							        $.ajax({
 							            type: "POST",
 							            dataType: "json",
-							            url: "@{/reset}",
+							            url: "[[@{/reset}]]",
 							            processData: true,
 							            success: function(data) {
-							            $(".bubble-right, .bubble-left").fadeOut("slow", function() {
-							                $("#conversation").empty();
-							            });
+								            $(".bubble-right, .bubble-left").fadeOut("slow", function() {
+								                $("#conversation").empty();
+								            });
+							            },
+							            error: function(xhr, status, error) {
+							                // Log the error details to the console
+							                console.log("Error occurred:", error);
+							                console.log("Status:", status);
+							                console.log("Response:", xhr.responseText);
+							                
+							                // Optionally, you could display the error to the user
+							                alert("An error occurred: " + error);
 							            }
 							        });
 							    });
@@ -89,6 +98,20 @@
 				        $("input").val('');
 				        $(".button").prop("disabled", true);
 				    }
+				    
+				    /*<![CDATA[*/
+			        var history = /*[[${history}]]*/ [];
+			        console.log(Array.isArray(history));
+			        console.log(history);
+			        /*]]>*/
+			        
+			        // Use the list in JavaScript
+			        console.log(history);
+
+			        // Example of accessing elements
+			        history.forEach(function(item) {
+			            console.log(item);
+			        });
 					
 				    bubbles(/*[[@{/ask}]]*/{}, /*[[${history}]]*/ {}, bubbles_cb);
 				</script>

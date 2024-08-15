@@ -1,15 +1,23 @@
 package com.redis.minipilot;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.springframework.stereotype.Controller;
+import static dev.langchain4j.data.message.UserMessage.userMessage;
+import static dev.langchain4j.data.message.AiMessage.aiMessage;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
 
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -26,52 +34,26 @@ import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.rag.query.transformer.CompressingQueryTransformer;
 import dev.langchain4j.rag.query.transformer.QueryTransformer;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
-import java.util.function.Consumer;
 
+@RestController
+public class ChatRestController {
 
-@Controller
-public class ChatController {
 	
-	@GetMapping("/")
-	public String chat(@RequestParam(name="name", required=false, defaultValue="chat") String name, Model model) {
-		model.addAttribute("name", name);
-		return "chat";
-	}
-	
-	@GetMapping("/cache")
-	public String cache(@RequestParam(name="name", required=false, defaultValue="cache") String name, Model model) {
-		model.addAttribute("name", name);
-		return "cache";
-	}
-	
-	
-	@GetMapping("/logger")
-	public String logger(@RequestParam(name="name", required=false, defaultValue="logger") String name, Model model) {
-		model.addAttribute("name", name);
-		return "logger";
-	}
-	
-	@GetMapping("/prompt")
-	public String prompt(@RequestParam(name="name", required=false, defaultValue="prompt") String name, Model model) {
-		model.addAttribute("name", name);
-		return "prompt";
-	}
-
-    @PostMapping("/ask")
+    //@RequestMapping(value = "/ask", method = {RequestMethod.POST})
+	@PostMapping(value = "/ask", produces = "text/plain")
     @ResponseBody
-    public ResponseBodyEmitter ask(@RequestParam("q") String q, HttpServletRequest request) {
-        String decodedQ = java.net.URLDecoder.decode(q, java.nio.charset.StandardCharsets.UTF_8);
-        
-        // Handle the data and perform necessary actions
-        // For example, print the received data to the console
-        System.out.println("Received data: " + decodedQ);
-        
+    public ResponseBodyEmitter ask(@RequestParam(value = "q") String q, HttpServletRequest request, HttpServletResponse response) {
+		response.setContentType("text/plain");
+        String decodedQ = java.net.URLDecoder.decode(q, java.nio.charset.StandardCharsets.UTF_8);        
         
         // https://github.com/langchain4j/langchain4j-examples/blob/69bc2bfb1d7b6c539c3a176912bc106dba6d5a75/other-examples/src/main/java/ChatWithDocumentsExamples.java
         ChatLanguageModel chatLanguageModel = OpenAiChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
@@ -89,7 +71,7 @@ public class ChatController {
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
                 .host("localhost")
                 .user("default")
-                .port(6399)
+                .port(6379)
                 .indexName("minipilot_rag_alias")
                 .dimension(1536)
                 //.metadataFieldsName(metadata)
@@ -107,35 +89,43 @@ public class ChatController {
                 .contentRetriever(contentRetriever)
                 .build();
         
-        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6399).build();
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6379).build();
         
         //https://github.com/langchain4j/langchain4j-examples/blob/main/other-examples/src/main/java/ServiceWithPersistentMemoryForEachUserExample.java
         ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
-                .id(request.getSession().getId())
+                .id(memoryId)
                 .maxMessages(10)
                 .chatMemoryStore(store)
                 .build();
         
-        Assistant2 assistant = AiServices.builder(Assistant2.class)
+        Assistant assistant = AiServices.builder(Assistant.class)
                 .streamingChatLanguageModel(streamingChatLanguageModel)
                 .chatMemoryProvider(chatMemoryProvider)
                 .retrievalAugmentor(retrievalAugmentor)
-                .chatMemory(MessageWindowChatMemory.withMaxMessages(10))
                 .build();
         
         ResponseBodyEmitter emitter = new ResponseBodyEmitter();
         
+        
         try {
-            TokenStream tokenStream = assistant.chat(q);
-
-            tokenStream.onNext(response -> {
+            TokenStream tokenStream = assistant.chat("minipilot:memory:" + request.getSession().getId(), q);
+            StringBuilder chunks = new StringBuilder();
+            tokenStream.onNext(responseData -> {
 				try {
-					emitter.send(response);
+					emitter.send(responseData);
+					chunks.append(responseData);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			})
-            	.onComplete(response -> emitter.complete()) 
+            	.onComplete(responseData -> {
+            		emitter.complete();
+            		String finalAnswer = chunks.toString();
+            		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
+            		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));
+            		
+            		
+            	})
             	.onError(emitter::completeWithError)  
             	.start();  // Start the streaming process
 
@@ -143,16 +133,13 @@ public class ChatController {
             emitter.completeWithError(e);  
         }
         
-        
-        System.out.println(request.getSession().getId());
-        
         return emitter;
 	}
     
     
-    public interface Assistant {
+    interface Assistant {
 
-        String answer(String query);
+    	TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage);
     }
     
     
@@ -161,10 +148,56 @@ public class ChatController {
         TokenStream chat(String message);
     }
     
-	
-	@GetMapping("/reset")
-	public String reset(@RequestParam(name="name", required=false, defaultValue="prompt") String name, Model model) {
-		model.addAttribute("name", name);
-		return "reset";
+    
+	@PostMapping("/reset")
+	public ResponseEntity reset(Model model, HttpServletRequest request) {
+		
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6379).build();
+        System.out.println(store.getMessages("minipilot:memory:" + request.getSession().getId()));
+		
+        store.deleteMessages("minipilot:memory:" + request.getSession().getId());
+        store.deleteMessages("minipilot:history:" + request.getSession().getId());
+        
+        // Return a JSON response
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "success");
+
+        return ResponseEntity.ok(response);
 	}
+	
+	
+	@GetMapping("/ask")
+	@ResponseBody
+	public String askGet() {
+	    return "This endpoint only supports POST requests.";
+	}
+    
+	
+	/*
+	// https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/memory/chat/redis/RedisChatMemoryStore.java
+    static class PersistentChatMemoryStore implements ChatMemoryStore {
+
+        private final DB db = DBMaker.fileDB("multi-user-chat-memory.db").transactionEnable().make();
+        private final Map<Integer, String> map = db.hashMap("messages", INTEGER, STRING).createOrOpen();
+
+        @Override
+        public List<ChatMessage> getMessages(Object memoryId) {
+            String json = map.get((int) memoryId);
+            return messagesFromJson(json);
+        }
+
+        @Override
+        public void updateMessages(Object memoryId, List<ChatMessage> messages) {
+            String json = messagesToJson(messages);
+            map.put((int) memoryId, json);
+            db.commit();
+        }
+
+        @Override
+        public void deleteMessages(Object memoryId) {
+            map.remove((int) memoryId);
+            db.commit();
+        }
+    }
+	*/
 }
