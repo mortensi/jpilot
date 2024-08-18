@@ -2,6 +2,8 @@ package com.redis.minipilot;
 
 import java.io.IOException;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -15,6 +17,10 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -35,29 +41,73 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
+import redis.clients.jedis.JedisPooled;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 
 @Controller
 public class WebController {
 	
+    @Value("${redis.host}")
+    private String host;
+
+    @Value("${redis.port}")
+    private int port;
+    
+    @Value("${redis.password}")
+    private String password;
+	
 	@GetMapping("/")
 	public String chat(@RequestParam(required=false, defaultValue="chat") String name, Model model, HttpServletRequest request) {
-		
-        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6379).build();
-        System.out.println(store.getMessages("minipilot:history:" + request.getSession().getId()).getClass().getName());
+		System.out.println(request.getSession().getId());
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host(host).port(port).password(password).build();
+        //System.out.println(store.getMessages("minipilot:history:" + request.getSession().getId()));
         
-        
-        List<String> myList = new ArrayList<>();
+        /*
+        ArrayList<String> myList = new ArrayList<>();
         myList.add("Item 1");
         myList.add("Item 2");
         myList.add("Item 3");
         model.addAttribute("history", myList);
+        */
         
-        //model.addAttribute("history", store.getMessages("minipilot:history:" + request.getSession().getId()));
+        List<ChatMessage> messages = store.getMessages("minipilot:history:" + request.getSession().getId());
+        
+        ArrayList<Map<String, String>> messageList = new ArrayList<>();
+
+        // Create the first dictionary (HumanMessage)
+
+        
+        for (ChatMessage msg : messages) {
+            //System.out.println(msg.getClass().getSimpleName().getClass().getName());
+         
+            //Map<String, String> message = new HashMap<>();
+            //message.put("type", msg.getClass().getSimpleName());
+            //message.put("content", "Hello, how are you?");
+            //messageList.add(message);
+            
+            Map<String, String> message = new HashMap<>();
+            
+            if (msg.getClass().getSimpleName().contentEquals("UserMessage")) {
+            	System.out.println(msg);
+                message.put("type", msg.getClass().getSimpleName());
+                message.put("content", msg.text());
+            }
+            if (msg.getClass().getSimpleName().contentEquals("AiMessage")) {
+            	System.out.println(msg);
+                message.put("type", msg.getClass().getSimpleName());
+                message.put("content", msg.text());
+            }
+            
+            messageList.add(message);
+        }
+        
+        model.addAttribute("conversation", messageList);
 		return "chat";
 	}
 	

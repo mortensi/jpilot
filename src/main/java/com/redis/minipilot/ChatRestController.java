@@ -120,6 +120,10 @@ public class ChatRestController {
 			})
             	.onComplete(responseData -> {
             		emitter.complete();
+            		
+            		// Limitation here https://docs.langchain4j.dev/tutorials/chat-memory/
+            		// LangChain4j currently offers only "memory", not "history". If you need to keep an entire history, please do so manually.
+            		// The memory comes with RAG context and without a separated field for the question, let's manage ourselves
             		String finalAnswer = chunks.toString();
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));

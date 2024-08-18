@@ -99,21 +99,12 @@
 				        $(".button").prop("disabled", true);
 				    }
 				    
-				    /*<![CDATA[*/
-			        var history = /*[[${history}]]*/ [];
-			        console.log(Array.isArray(history));
-			        console.log(history);
-			        /*]]>*/
-			        
-			        // Use the list in JavaScript
-			        console.log(history);
+			        // Thymeleaf expression converts Java list to JSON array
+			        // var conversation = /*[[${conversation}]]*/ [];
+			        //console.log(conversation);
 
-			        // Example of accessing elements
-			        history.forEach(function(item) {
-			            console.log(item);
-			        });
 					
-				    bubbles(/*[[@{/ask}]]*/{}, /*[[${history}]]*/ {}, bubbles_cb);
+				    bubbles(/*[[@{/ask}]]*/{}, /*[[${conversation}]]*/ [], bubbles_cb);
 				</script>
             </div>
         </section>

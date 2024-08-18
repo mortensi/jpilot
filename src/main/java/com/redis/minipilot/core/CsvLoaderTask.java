@@ -17,9 +17,11 @@ import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisDataException;
 
@@ -32,6 +34,14 @@ import java.util.*;
 
 
 public class CsvLoaderTask {
+	
+    // Injected JedisPooled instance
+    private final JedisPooled jedisPooled;
+    
+    @Autowired
+    public CsvLoaderTask(JedisPooled jedisPooled) {
+        this.jedisPooled = jedisPooled;
+    }
 
 
     public static void csvLoaderTask(String filename) {

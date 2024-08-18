@@ -1,13 +1,19 @@
 var converter = new showdown.Converter();
 
 function bubbles(endpoint, history, callback=undefined){
-    var obj = jQuery.parseJSON(JSON.stringify(history));
-    $.each(obj, function(key,value) {
-        if (value.type == "HumanMessage")
-            $( "#conversation" ).append('<div class="bubble bubble-right">' + value.content + '</div>');
-        if (value.type == "AIMessage")
-            $( "#conversation" ).append('<div class="bubble bubble-left">' + converter.makeHtml(value.content) + '</div>');
-    });
+
+    // Ensure history is an array and use it
+    if (Array.isArray(history)) {
+    	history.forEach(function(value) {
+            if (value.type == "UserMessage")
+            	$( "#conversation" ).append('<div class="bubble bubble-right">' + value.content + '</div>');
+        	if (value.type == "AiMessage")
+            	$( "#conversation" ).append('<div class="bubble bubble-left">' + converter.makeHtml(value.content) + '</div>');
+        });
+    } else {
+        console.error('Expected an array, but got:', conversation);
+    }
+
     scroll();
 
     $("#chat").click(function(e){

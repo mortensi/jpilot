@@ -31,11 +31,14 @@ import org.springframework.web.servlet.view.RedirectView;
 
 import com.redis.minipilot.core.CsvLoaderTask;
 import com.redis.minipilot.core.FileProcessingUtils;
+import com.redis.minipilot.database.RedisConfig;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.search.Document;
@@ -49,19 +52,25 @@ public class DataController {
     
     @Autowired
     private FileProcessingUtils fileProcessingUtils;
+    
+    // Injected JedisPooled instance
+    private final JedisPooled jedisPooled;
+    
+    @Autowired
+    public DataController(JedisPooled jedisPooled) {
+        this.jedisPooled = jedisPooled;
+    }
 	
 	
 	@GetMapping("/data")
 	public String data(@RequestParam(name="name", required=false, defaultValue="data") String name, Model model) {			
-		UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-		
 		// Check the CSV files
 		Query q = new Query("*");
 		q.returnFields("filename");
 		q.setSortBy("uploaded", false);
 		q.limit(0, 50);
 		
-		List<Document> docs = unifiedjedis.ftSearch("minipilot_data_idx", q).getDocuments();
+		List<Document> docs = jedisPooled.ftSearch("minipilot_data_idx", q).getDocuments();
 		
         for (Document doc : docs) {
         	String[] parts = doc.getId().split(":");
@@ -74,13 +83,13 @@ public class DataController {
         Map<String, Object> idxAliasInfo = null;
         
         try {
-        	idxAliasInfo = unifiedjedis.ftInfo("minipilot_rag_alias");
+        	idxAliasInfo = jedisPooled.ftInfo("minipilot_rag_alias");
         }
 		catch (JedisDataException e) {
 			System.out.println("The minipilot_data_idx alias does not exist");
 		}
         
-        Set<String> indexes = unifiedjedis.ftList(); // Adjust this according to how you retrieve this list
+        Set<String> indexes = jedisPooled.ftList(); // Adjust this according to how you retrieve this list
 
         // Filter for indexes starting with "minipilot_rag"
         List<String> ragIndexes = indexes.stream()
@@ -90,7 +99,7 @@ public class DataController {
         // Retrieve information for each filtered index
         for (String idx : ragIndexes) {
             // Retrieve index info
-            Map<String, Object> idxInfo = unifiedjedis.ftInfo(idx); // Adjust this according to how you retrieve index info
+            Map<String, Object> idxInfo = jedisPooled.ftInfo(idx); // Adjust this according to how you retrieve index info
             Map<String, Object> tmp = new HashMap<>();
             tmp.put("name", idxInfo.get("index_name"));
             tmp.put("docs", String.valueOf(idxInfo.get("num_docs")));
@@ -161,8 +170,8 @@ public class DataController {
     @GetMapping("/data/create/{id}")
     public RedirectView createIndex(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
         // Get filename from database
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-        String filename = unifiedjedis.hget("minipilot:data:" + id, "filename");
+
+        String filename = jedisPooled.hget("minipilot:data:" + id, "filename");
         
         System.out.println(filename);
 
@@ -194,8 +203,7 @@ public class DataController {
     
     @GetMapping("/data/remove/{id}")
     public RedirectView removeFile(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-        String filename = unifiedjedis.hget("minipilot:data:" + id, "filename");
+        String filename = jedisPooled.hget("minipilot:data:" + id, "filename");
 
         // Construct the file path
         String uploadFolder = System.getenv("MINIPILOT_ASSETS");
@@ -207,7 +215,7 @@ public class DataController {
         }
 
         // Remove the entry from the database
-        unifiedjedis.del("minipilot:data:" + id);
+        jedisPooled.del("minipilot:data:" + id);
 
         // Redirect to the data page
         return new RedirectView("/data", true);
@@ -216,9 +224,7 @@ public class DataController {
     
     @GetMapping("/data/delete/{name}")
     public RedirectView deleteIndex(@PathVariable("name") String name, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-        
-    	unifiedjedis.ftDropIndexDD(name);
+    	jedisPooled.ftDropIndexDD(name);
 
 
         // Redirect to the data page
@@ -228,9 +234,7 @@ public class DataController {
     
     @GetMapping("/data/current/{name}")
     public RedirectView currentIndex(@PathVariable("name") String name, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-    	
-    	unifiedjedis.ftAliasUpdate("minipilot_rag_alias", name);
+    	jedisPooled.ftAliasUpdate("minipilot_rag_alias", name);
 
         // Redirect to the data page
         return new RedirectView("/data", true);
