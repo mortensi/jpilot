@@ -18,6 +18,9 @@ import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
@@ -32,8 +35,17 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 
-
+@Component
 public class CsvLoaderTask {
+	
+    @Value("${redis.host}")
+    private static String host;
+
+    @Value("${redis.port}")
+    private static int port;
+    
+    @Value("${redis.password}")
+    private String password;
 	
     // Injected JedisPooled instance
     private final JedisPooled jedisPooled;
@@ -44,13 +56,12 @@ public class CsvLoaderTask {
     }
 
 
-    public static void csvLoaderTask(String filename) {
-    	UnifiedJedis conn = new UnifiedJedis(new HostAndPort("localhost", 6379));
+    public void load(String filename) {
     	System.out.println("Loading CSV with LangChain4J");
     	
         // Check if alias exists for semantic search
         try {
-        	Map<String, Object> idx_alias_info = conn.ftInfo("minipilot_rag_alias");
+        	jedisPooled.ftInfo("minipilot_rag_alias");
         } catch (JedisDataException e) {
         	System.out.println("No alias exists for semantic search. Associate the alias to the desired index");
         }
@@ -73,9 +84,9 @@ public class CsvLoaderTask {
         // https://github.com/langchain4j/langchain4j-examples/blob/main/redis-example/src/main/java/RedisEmbeddingStoreExample.java
         // https://github.com/langchain4j/langchain4j/pull/1347
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
-                .host("localhost")
+                .host(host)
                 .user("default")
-                .port(6379)
+                .port(port)
                 .indexName(indexName)
                 .dimension(1536)
                 //.metadataFieldsName(metadata)
@@ -98,9 +109,8 @@ public class CsvLoaderTask {
                 .build();
         
         
-        Document csv = new Document("l'ira funesta che infiniti adduse lutti agli Achei, molte anzi tempo all'orco generose travolse alme d'eroi, e di cani e d'augelli orrido pasto lor salme abbandonò (così di Giove l'alto consiglio s'adempìa), da quando primamente disgiunse aspra contesa il re de' prodi Atride e il divo Achille. E qual de numi inimmicoli? Il figlio Latona e di Giove.Irato al Sire destò quel Dio nel campo un ferro morbo,e la gente perìa:colpa d'Atride che fece a Crise sacerdote oltraggio. ");
-        
         // First method to split and embed a document
+        // Document csv = new Document("l'ira funesta che infiniti adduse lutti agli Achei, molte anzi tempo all'orco generose travolse alme d'eroi, e di cani e d'augelli orrido pasto lor salme abbandonò (così di Giove l'alto consiglio s'adempìa), da quando primamente disgiunse aspra contesa il re de' prodi Atride e il divo Achille. E qual de numi inimmicoli? Il figlio Latona e di Giove.Irato al Sire destò quel Dio nel campo un ferro morbo,e la gente perìa:colpa d'Atride che fece a Crise sacerdote oltraggio. ");
         //DocumentSplitter splitter = DocumentSplitters.recursive(10000, 50);
         //List<TextSegment> chunks = splitter.split(csv);
         //System.out.println(chunks.size());

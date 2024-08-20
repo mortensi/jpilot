@@ -19,6 +19,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.redis.minipilot.core.SystemPromptDefault;
+import com.redis.minipilot.core.UserPromptDefault;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.segment.TextSegment;
@@ -61,45 +63,38 @@ public class WebController {
     
     @Value("${redis.password}")
     private String password;
+    
+    @Autowired
+    private final JedisPooled jedisPooled;
+    
+    @Autowired
+    public WebController() {
+		this.jedisPooled = new JedisPooled();
+
+    }
 	
 	@GetMapping("/")
 	public String chat(@RequestParam(required=false, defaultValue="chat") String name, Model model, HttpServletRequest request) {
 		System.out.println(request.getSession().getId());
-        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host(host).port(port).password(password).build();
-        //System.out.println(store.getMessages("minipilot:history:" + request.getSession().getId()));
-        
-        /*
-        ArrayList<String> myList = new ArrayList<>();
-        myList.add("Item 1");
-        myList.add("Item 2");
-        myList.add("Item 3");
-        model.addAttribute("history", myList);
-        */
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder()
+        		.host(host)
+        		.port(port)
+        		.password(password)
+        		.build();
+
         
         List<ChatMessage> messages = store.getMessages("minipilot:history:" + request.getSession().getId());
         
         ArrayList<Map<String, String>> messageList = new ArrayList<>();
-
-        // Create the first dictionary (HumanMessage)
-
         
         for (ChatMessage msg : messages) {
-            //System.out.println(msg.getClass().getSimpleName().getClass().getName());
-         
-            //Map<String, String> message = new HashMap<>();
-            //message.put("type", msg.getClass().getSimpleName());
-            //message.put("content", "Hello, how are you?");
-            //messageList.add(message);
-            
             Map<String, String> message = new HashMap<>();
             
             if (msg.getClass().getSimpleName().contentEquals("UserMessage")) {
-            	System.out.println(msg);
                 message.put("type", msg.getClass().getSimpleName());
                 message.put("content", msg.text());
             }
             if (msg.getClass().getSimpleName().contentEquals("AiMessage")) {
-            	System.out.println(msg);
                 message.put("type", msg.getClass().getSimpleName());
                 message.put("content", msg.text());
             }
@@ -128,9 +123,22 @@ public class WebController {
 	
 	@GetMapping("/prompt")
 	public String prompt(@RequestParam(name="name", required=false, defaultValue="prompt") String name, Model model) {
-		model.addAttribute("name", name);
+		model.addAttribute("system", jedisPooled.get("minipilot:prompt:system"));
+		model.addAttribute("user", jedisPooled.get("minipilot:prompt:user"));
+		
 		return "prompt";
 	}
+	
+    @PostMapping("/prompt/save")
+    public String savePrompt(@RequestParam("prompt") String prompt, @RequestParam("type") String type) {
+        if ("system".equals(type)) {
+        	jedisPooled.set("minipilot:prompt:system", prompt);
+        } else if ("user".equals(type)) {
+        	jedisPooled.set("minipilot:prompt:user", prompt);
+        }
+
+        return "redirect:/prompt";  
+    }
 	
 	
     //@RequestMapping("/error")

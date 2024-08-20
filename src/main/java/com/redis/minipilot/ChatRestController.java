@@ -7,6 +7,8 @@ import java.util.Map;
 import static dev.langchain4j.data.message.UserMessage.userMessage;
 import static dev.langchain4j.data.message.AiMessage.aiMessage;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,44 +37,92 @@ import dev.langchain4j.rag.query.transformer.CompressingQueryTransformer;
 import dev.langchain4j.rag.query.transformer.QueryTransformer;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.MemoryId;
+import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.exceptions.JedisDataException;
 
 
 @RestController
 public class ChatRestController {
+    @Value("${redis.host}")
+    private String host;
 
+    @Value("${redis.port}")
+    private int port;
+    
+    @Value("${redis.password}")
+    private String password;
+    
+    @Autowired
+    private final JedisPooled jedisPooled;
+    
+    @Autowired
+    public ChatRestController() {
+		this.jedisPooled = new JedisPooled();
+
+    }
 	
-    //@RequestMapping(value = "/ask", method = {RequestMethod.POST})
+
 	@PostMapping(value = "/ask", produces = "text/plain")
     @ResponseBody
     public ResponseBodyEmitter ask(@RequestParam(value = "q") String q, HttpServletRequest request, HttpServletResponse response) {
-		response.setContentType("text/plain");
-        String decodedQ = java.net.URLDecoder.decode(q, java.nio.charset.StandardCharsets.UTF_8);        
+		response.setContentType("text/plain");  
+		ResponseBodyEmitter emitter = new ResponseBodyEmitter();
         
         // https://github.com/langchain4j/langchain4j-examples/blob/69bc2bfb1d7b6c539c3a176912bc106dba6d5a75/other-examples/src/main/java/ChatWithDocumentsExamples.java
         ChatLanguageModel chatLanguageModel = OpenAiChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
         
-        StreamingChatLanguageModel streamingChatLanguageModel = OpenAiStreamingChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
-        //String answer = chatLanguageModel.generate(decodedQ);
+        OpenAiStreamingChatModel streamingChatLanguageModel = OpenAiStreamingChatModel.builder()
+	        .apiKey(System.getenv("OPENAI_API_KEY"))
+	        .logRequests(true)
+	        .logResponses(true)
+	        .build();
         
         // https://github.com/langchain4j/langchain4j-examples/blob/main/rag-examples/src/main/java/_3_advanced/_01_Advanced_RAG_with_Query_Compression_Example.java
         QueryTransformer queryTransformer = new CompressingQueryTransformer(chatLanguageModel);
         
         OpenAiEmbeddingModel embeddingModel = OpenAiEmbeddingModel.builder()
-                .apiKey(System.getenv("OPENAI_API_KEY")).modelName("text-embedding-ada-002")
+                .apiKey(System.getenv("OPENAI_API_KEY"))
+                .modelName("text-embedding-ada-002")
+                .logRequests(false)
+                .logResponses(false)
                 .build();
         
+        // If I use an alias here, an index will be created with the alias name.
+        // That's a bug
+        // For now, just dereference the alias to use the pointed index
+        
+        // Check to what index the alias is pointing to
+        String idx;
+        try {
+        	Map<String, Object> idxAliasInfo = jedisPooled.ftInfo("minipilot_rag_alias");
+        	idx = (String) idxAliasInfo.get("index_name");
+        }
+		catch (JedisDataException e) {
+			System.out.println("The minipilot_data_idx alias does not exist");
+			try {
+				emitter.send("You must associate the alias to an index");
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+			return emitter;
+		}
+
+        
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
-                .host("localhost")
+                .host(host)
                 .user("default")
-                .port(6379)
-                .indexName("minipilot_rag_alias")
+                .port(port)
+                .indexName(idx)
                 .dimension(1536)
                 //.metadataFieldsName(metadata)
                 .build();
@@ -89,7 +139,10 @@ public class ChatRestController {
                 .contentRetriever(contentRetriever)
                 .build();
         
-        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6379).build();
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder()
+        								.host(host)
+        								.port(port)
+        								.build();
         
         //https://github.com/langchain4j/langchain4j-examples/blob/main/other-examples/src/main/java/ServiceWithPersistentMemoryForEachUserExample.java
         ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
@@ -98,17 +151,19 @@ public class ChatRestController {
                 .chatMemoryStore(store)
                 .build();
         
-        Assistant assistant = AiServices.builder(Assistant.class)
+        Assistant2 assistant = AiServices.builder(Assistant2.class)
                 .streamingChatLanguageModel(streamingChatLanguageModel)
                 .chatMemoryProvider(chatMemoryProvider)
                 .retrievalAugmentor(retrievalAugmentor)
                 .build();
         
-        ResponseBodyEmitter emitter = new ResponseBodyEmitter();
-        
-        
         try {
-            TokenStream tokenStream = assistant.chat("minipilot:memory:" + request.getSession().getId(), q);
+            TokenStream tokenStream = assistant.chat(	"minipilot:memory:" + request.getSession().getId(), 
+            											"You are a movie expert",
+									            		"Answer this question politely {{message}}",
+									            		q);
+            
+        	//TokenStream tokenStream = assistant.chat(q);
             StringBuilder chunks = new StringBuilder();
             tokenStream.onNext(responseData -> {
 				try {
@@ -142,22 +197,28 @@ public class ChatRestController {
     
     
     interface Assistant {
-
-    	TokenStream chat(@MemoryId String memoryId, @UserMessage String userMessage);
+    	TokenStream chat(	@MemoryId String memoryId, 
+    						@UserMessage String userMessage);
     }
     
     
-    interface Assistant2 {
-
-        TokenStream chat(String message);
+    interface Assistant2 { 	
+    	@SystemMessage("{{systemPrompt}}")
+    	//@UserMessage("Answer this question politely {{message}}")
+        TokenStream chat(	@MemoryId String memoryId, 
+        					@V("systemPrompt") String systemPrompt,
+        					@UserMessage String userMessage, 
+        					@V("message") String question);
     }
     
     
 	@PostMapping("/reset")
 	public ResponseEntity reset(Model model, HttpServletRequest request) {
 		
-        RedisChatMemoryStore store = RedisChatMemoryStore.builder().host("localhost").port(6379).build();
-        System.out.println(store.getMessages("minipilot:memory:" + request.getSession().getId()));
+        RedisChatMemoryStore store = RedisChatMemoryStore.builder()
+        		.host(host)
+        		.port(port)
+        		.build();
 		
         store.deleteMessages("minipilot:memory:" + request.getSession().getId());
         store.deleteMessages("minipilot:history:" + request.getSession().getId());

@@ -12,19 +12,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.view.RedirectView;
@@ -33,13 +29,9 @@ import com.redis.minipilot.core.CsvLoaderTask;
 import com.redis.minipilot.core.FileProcessingUtils;
 import com.redis.minipilot.database.RedisConfig;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import jakarta.servlet.http.HttpServletRequest;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Connection;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.search.Document;
 import redis.clients.jedis.search.Query;
@@ -47,18 +39,20 @@ import redis.clients.jedis.search.Query;
 
 @Controller
 public class DataController {
-    @Autowired
-    private Environment env;
     
     @Autowired
     private FileProcessingUtils fileProcessingUtils;
     
-    // Injected JedisPooled instance
+    @Autowired
+    private CsvLoaderTask csvLoaderTask;
+    
+    @Autowired
     private final JedisPooled jedisPooled;
     
     @Autowired
-    public DataController(JedisPooled jedisPooled) {
-        this.jedisPooled = jedisPooled;
+    public DataController() {
+		this.jedisPooled = new JedisPooled();
+
     }
 	
 	
@@ -90,6 +84,7 @@ public class DataController {
 		}
         
         Set<String> indexes = jedisPooled.ftList(); // Adjust this according to how you retrieve this list
+        System.out.println(indexes);
 
         // Filter for indexes starting with "minipilot_rag"
         List<String> ragIndexes = indexes.stream()
@@ -152,9 +147,8 @@ public class DataController {
                 // Here you would add logic to save the file metadata to your database
                 String key = "minipilot:data:" + UUID.randomUUID().toString().replace("-", "");
                 
-                UnifiedJedis unifiedjedis = new UnifiedJedis(new HostAndPort("localhost", 6379));
-                unifiedjedis.hset(key, "filename", filename);
-                unifiedjedis.hset(key, "uploaded", String.valueOf(Instant.now().getEpochSecond()));
+                jedisPooled.hset(key, "filename", filename);
+                jedisPooled.hset(key, "uploaded", String.valueOf(Instant.now().getEpochSecond()));
 
                 System.out.println("File metadata saved to database");
             }
@@ -183,10 +177,10 @@ public class DataController {
         //processFileAsync(path);
         
         // Use the utility method to process the file asynchronously
-        //fileProcessingUtils.processFileAsync(path);
+        fileProcessingUtils.processFileAsync(path);
 
         // Or use the utility method to process the file synchronously, for debugging
-        CsvLoaderTask.csvLoaderTask(path);
+        //csvLoaderTask.load(path);
         
         // Wait for a second to simulate the original behavior (not recommended in production)
         try {

@@ -54,4 +54,6 @@ html{
     cursor: not-allowed;
 }
 
-
+textarea {
+	resize: none;
+}
