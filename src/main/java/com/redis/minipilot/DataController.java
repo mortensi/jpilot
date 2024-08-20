@@ -177,10 +177,10 @@ public class DataController {
         //processFileAsync(path);
         
         // Use the utility method to process the file asynchronously
-        fileProcessingUtils.processFileAsync(path);
+        //fileProcessingUtils.processFileAsync(path);
 
         // Or use the utility method to process the file synchronously, for debugging
-        //csvLoaderTask.load(path);
+        csvLoaderTask.load(path);
         
         // Wait for a second to simulate the original behavior (not recommended in production)
         try {

@@ -26,7 +26,6 @@ public class RedisConfig {
     private String password;
     
 
-
     @Bean
     public JedisPooled jedisPooled() {
     	HostAndPort hostAndPort = new HostAndPort(host, port);

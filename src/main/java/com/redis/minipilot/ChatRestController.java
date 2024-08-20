@@ -97,9 +97,9 @@ public class ChatRestController {
                 .build();
         
         // If I use an alias here, an index will be created with the alias name.
-        // That's a bug
+        // That's a bug in isIndexExist https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisEmbeddingStore.java#L52
+        // Should use ftInfo rather than ftList
         // For now, just dereference the alias to use the pointed index
-        
         // Check to what index the alias is pointing to
         String idx;
         try {
@@ -157,10 +157,13 @@ public class ChatRestController {
                 .retrievalAugmentor(retrievalAugmentor)
                 .build();
         
+        String systemPrompt = jedisPooled.get("minipilot:prompt:system");
+        String userPrompt = jedisPooled.get("minipilot:prompt:user");
+        
         try {
             TokenStream tokenStream = assistant.chat(	"minipilot:memory:" + request.getSession().getId(), 
-            											"You are a movie expert",
-									            		"Answer this question politely {{message}}",
+            											systemPrompt,
+            											userPrompt,
 									            		q);
             
         	//TokenStream tokenStream = assistant.chat(q);
@@ -208,7 +211,7 @@ public class ChatRestController {
         TokenStream chat(	@MemoryId String memoryId, 
         					@V("systemPrompt") String systemPrompt,
         					@UserMessage String userMessage, 
-        					@V("message") String question);
+        					@V("question") String question);
     }
     
     

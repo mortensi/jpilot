@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
+import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -39,10 +40,10 @@ import java.util.*;
 public class CsvLoaderTask {
 	
     @Value("${redis.host}")
-    private static String host;
+    private String host;
 
     @Value("${redis.port}")
-    private static int port;
+    private int port;
     
     @Value("${redis.password}")
     private String password;
@@ -80,16 +81,23 @@ public class CsvLoaderTask {
         // choosing 10000 as chunk size seems ok
         
         var metadata = List.of("title", "description");
+        Map<String, String> metadata2 = new HashMap<>();
         
         // https://github.com/langchain4j/langchain4j-examples/blob/main/redis-example/src/main/java/RedisEmbeddingStoreExample.java
+        // https://github.com/langchain4j/langchain4j/issues/1340
         // https://github.com/langchain4j/langchain4j/pull/1347
+        
+        // It seems like metadata is indexed as TEXT only, according to the implmentation in toSchemaFields
+        // https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisSchema.java#L51
+        // This prevents from running NUMERIC or GEO or any other kind of advanced RAG query
+        // https://github.com/langchain4j/langchain4j/discussions/1612
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
                 .host(host)
                 .user("default")
                 .port(port)
                 .indexName(indexName)
                 .dimension(1536)
-                //.metadataFieldsName(metadata)
+                .metadataKeys(List.of("score", "date_x"))
                 .build();
         
         OpenAiEmbeddingModel embeddingModel = null;
@@ -127,11 +135,17 @@ public class CsvLoaderTask {
             Scanner scanner = new Scanner(fileReader);
 
             List<Map<String, String>> csvData = readCSV(scanner);
-
+            
+            
             for (Map<String, String> row : csvData) {
                 String rowStr = rowToString(row);
                 Document movie = new Document(rowStr);
-                ingestor.ingest(movie);
+                
+                Document movieWithMetadata = createFromCSVLine(row, List.of("score", "date_x"));
+                ingestor.ingest(movieWithMetadata);
+                System.out.println(movieWithMetadata);
+                
+                //ingestor.ingest(movie);
             }
         }
 	    catch (IOException e) {
@@ -180,6 +194,24 @@ public class CsvLoaderTask {
         
         */
     }
+    
+    
+    private Document createFromCSVLine(	Map<String, String> row,
+            							List<String> columnsToIncludeInMetadata) {
+        
+        Map<String, String> metadata = new HashMap<>();
+        StringBuilder rowStr = new StringBuilder();
+        for (Map.Entry<String, String> entry : row.entrySet()) {
+            if (columnsToIncludeInMetadata.contains(entry.getKey())) {
+                metadata.put(entry.getKey(), entry.getValue());
+            }
+            rowStr.append(entry.getKey()).append(": ").append(entry.getValue()).append("; ");
+        }
+        
+        // The \n is added to the end of the content
+        return new Document(rowStr.append("\n").toString(), Metadata.from(metadata));
+    }
+    
 
     private static List<Map<String, String>> readCSV(Scanner scanner) throws IOException {
         List<Map<String, String>> rows = new ArrayList<>();
@@ -195,17 +227,15 @@ public class CsvLoaderTask {
         return rows;
     }
 
+    
     private static String rowToString(Map<String, String> row) {
         StringBuilder rowStr = new StringBuilder();
         for (Map.Entry<String, String> entry : row.entrySet()) {
-            rowStr.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            rowStr.append(entry.getKey()).append(": ").append(entry.getValue()).append("; ");
         }
         return rowStr.toString();
     }
 
-    private static String generateRedisConnectionString(String host, int port, String password) {
-        return "redis://" + (password != null && !password.isEmpty() ? ":" + password + "@" : "") + host + ":" + port;
-    }
 
     private static String getFilenameWithoutExtension(String filename) {
         return new File(filename).getName().replaceFirst("[.][^.]+$", "");
