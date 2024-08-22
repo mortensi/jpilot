@@ -28,6 +28,13 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisDataException;
+import redis.clients.jedis.json.Path2;
+import redis.clients.jedis.search.IndexDataType;
+import redis.clients.jedis.search.IndexDefinition;
+import redis.clients.jedis.search.IndexDefinition.Type;
+import redis.clients.jedis.search.IndexOptions;
+import redis.clients.jedis.search.Schema;
+import redis.clients.jedis.search.schemafields.NumericField;
 
 import java.io.File;
 import java.io.FileReader;
@@ -80,25 +87,17 @@ public class CsvLoaderTask {
         // 8191 x 4 = 32764 maximum characters that can be represented by a vector embedding
         // choosing 10000 as chunk size seems ok
         
-        var metadata = List.of("title", "description");
-        Map<String, String> metadata2 = new HashMap<>();
-        
         // https://github.com/langchain4j/langchain4j-examples/blob/main/redis-example/src/main/java/RedisEmbeddingStoreExample.java
+        // Note that it is not possible to indicate a prefix for the index, which means that everything ingested will be indexed
+        // Which also means that an application can be single-indexed and the Redis alias is meaningless
         // https://github.com/langchain4j/langchain4j/issues/1340
         // https://github.com/langchain4j/langchain4j/pull/1347
         
-        // It seems like metadata is indexed as TEXT only, according to the implmentation in toSchemaFields
+        // It seems like metadata is indexed as TEXT only, according to the implementation in toSchemaFields
         // https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisSchema.java#L51
         // This prevents from running NUMERIC or GEO or any other kind of advanced RAG query
         // https://github.com/langchain4j/langchain4j/discussions/1612
-        EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
-                .host(host)
-                .user("default")
-                .port(port)
-                .indexName(indexName)
-                .dimension(1536)
-                .metadataKeys(List.of("score", "date_x"))
-                .build();
+        // For the time being, let's comment metadataKeys
         
         OpenAiEmbeddingModel embeddingModel = null;
         try {
@@ -109,23 +108,46 @@ public class CsvLoaderTask {
             System.out.println("Cannot instantiate the embedding model");
         }
         
+        /*
+        EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
+                .host(host)
+                .user("default")
+                .port(port)
+                .indexName(indexName)
+                .dimension(1536)
+                .metadataKeys(List.of("score"))
+                .build();        
         
         EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                 .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
                 .documentSplitter(DocumentSplitters.recursive(10000, 50)) //, new OpenAiTokenizer()
                 .build();
+        */
+        
+        Map<String, Object> attr = new HashMap<>();
+        attr.put("TYPE", "FLOAT32");
+        attr.put("DIM", 1536);
+        attr.put("DISTANCE_METRIC", "COSINE");
+        attr.put("INITIAL_CAP", 5);
+        Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector")
+        							.addTextField("$.text", 1.0).as("text")
+        							.addNumericField("$.score").as("score");
+        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {"embedding:"});
+        jedisPooled.ftCreate(indexName, IndexOptions.defaultOptions().setDefinition(def), schema);
         
         
         // First method to split and embed a document
-        // Document csv = new Document("l'ira funesta che infiniti adduse lutti agli Achei, molte anzi tempo all'orco generose travolse alme d'eroi, e di cani e d'augelli orrido pasto lor salme abbandonò (così di Giove l'alto consiglio s'adempìa), da quando primamente disgiunse aspra contesa il re de' prodi Atride e il divo Achille. E qual de numi inimmicoli? Il figlio Latona e di Giove.Irato al Sire destò quel Dio nel campo un ferro morbo,e la gente perìa:colpa d'Atride che fece a Crise sacerdote oltraggio. ");
-        //DocumentSplitter splitter = DocumentSplitters.recursive(10000, 50);
-        //List<TextSegment> chunks = splitter.split(csv);
-        //System.out.println(chunks.size());
-        //Response<List<Embedding>> embeddings = embeddingModel.embedAll(chunks);
-        //embeddingStore.addAll(embeddings.content(), chunks);
+        /*
+        Document csv = new Document("l'ira funesta che infiniti adduse lutti agli Achei, molte anzi tempo all'orco generose travolse alme d'eroi, e di cani e d'augelli orrido pasto lor salme abbandonò (così di Giove l'alto consiglio s'adempìa), da quando primamente disgiunse aspra contesa il re de' prodi Atride e il divo Achille. E qual de numi inimmicoli? Il figlio Latona e di Giove.Irato al Sire destò quel Dio nel campo un ferro morbo,e la gente perìa:colpa d'Atride che fece a Crise sacerdote oltraggio. ");
+        DocumentSplitter splitter = DocumentSplitters.recursive(10000, 50);
+        List<TextSegment> chunks = splitter.split(csv);
+        System.out.println(chunks.size());
+        Response<List<Embedding>> embeddings = embeddingModel.embedAll(chunks);
+        embeddingStore.addAll(embeddings.content(), chunks);
+        */
         
-        // Second method to split and embed a document
+        // Second method to split and embed a document, used below
         //ingestor.ingest(csv);
         
         // Load CSV and index the content
@@ -136,17 +158,34 @@ public class CsvLoaderTask {
 
             List<Map<String, String>> csvData = readCSV(scanner);
             
-            
+            int cnt = 0;
             for (Map<String, String> row : csvData) {
                 String rowStr = rowToString(row);
-                Document movie = new Document(rowStr);
                 
-                Document movieWithMetadata = createFromCSVLine(row, List.of("score", "date_x"));
-                ingestor.ingest(movieWithMetadata);
-                System.out.println(movieWithMetadata);
+                System.out.println(row);
                 
-                //ingestor.ingest(movie);
+                // This is my low-level ingestion
+                Map<String, Object> fields = new HashMap<>();
+                fields.put("text", rowStr);
+                fields.put("vector", embeddingModel.embed(rowStr).content().vector());
+                fields.put("score", Float.parseFloat(row.get("score")));
+                fields.put("names", row.get("names"));
+                jedisPooled.jsonSetWithEscape("embedding:" + UUID.randomUUID().toString(), Path2.of("$"), fields);
+                
+                // This is an example of ingestor with metadata, but unfortunately ingested metadata is only indexed as TEXT
+                // Document movieWithMetadata = createFromCSVLine(row, List.of("score"));
+                // ingestor.ingest(movieWithMetadata);
+                // System.out.println(movieWithMetadata);
+                
+                // This is ingestion without metadata
+                // Document movie = new Document(rowStr);
+                // ingestor.ingest(movie);
+                cnt++;
+                if (cnt == 10) {
+                	break;
+                }
             }
+            
         }
 	    catch (IOException e) {
 	    	System.out.println("Error reading CSV file");
@@ -154,45 +193,6 @@ public class CsvLoaderTask {
 	    }
         
         System.out.println("Done loading CSV with LangChain4J");
-        
-        
-        /*
-        DocumentSplitter documentSplitter = DocumentSplitter.recursive(1000, 150);
-        DocumentSplitters.recursive(1000, 200, new OpenAiTokenizer());
-        //DocumentByCharacterSplitter splitter = new DocumentByCharacterSplitter(1024, 0, tokenizer);
-        
-        DocumentSplitter splitter = DocumentSplitters.recursive(300, 0);
-        List<TextSegment> segments = splitter.split(document);
-
-        // Load CSV and index the content
-        try (FileReader fileReader = new FileReader(filename);
-             Scanner scanner = new Scanner(fileReader)) {
-
-            List<Map<String, String>> csvData = readCSV(scanner);
-
-            for (Map<String, String> row : csvData) {
-                String rowStr = rowToString(row);
-                List<String> splits = docSplitter.splitText(rowStr);
-
-                if (!splits.isEmpty()) {
-                    RedisVectorStore redisVectorStore = new RedisVectorStore(
-                            RedisVectorStore.Builder.builder()
-                                    .redisUrl(generateRedisConnectionString(REDIS_HOST, REDIS_PORT, REDIS_PASSWORD))
-                                    .indexName(indexName)
-                                    .embeddingModel(embeddingModel)
-                                    .vectorSchema(vectorSchema)
-                                    .build()
-                    );
-
-                    redisVectorStore.fromTexts(splits, null);
-                }
-            }
-
-        } catch (IOException e) {
-            logger.error("Error reading CSV file", e);
-        }
-        
-        */
     }
     
     

@@ -2,7 +2,9 @@ package com.redis.minipilot;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static dev.langchain4j.data.message.UserMessage.userMessage;
 import static dev.langchain4j.data.message.AiMessage.aiMessage;
@@ -13,19 +15,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
-
+import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
@@ -47,7 +46,17 @@ import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.exceptions.JedisDataException;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.search.Document;
+import redis.clients.jedis.search.Query;
+import redis.clients.jedis.search.aggr.AggregationBuilder;
+import redis.clients.jedis.search.aggr.AggregationResult;
+import redis.clients.jedis.search.aggr.Group;
+import redis.clients.jedis.search.aggr.Reducer;
+import redis.clients.jedis.search.aggr.Reducers;
+import redis.clients.jedis.search.aggr.SortedField;
 
 
 @RestController
@@ -60,6 +69,9 @@ public class ChatRestController {
     
     @Value("${redis.password}")
     private String password;
+    
+    @Value("${minipilot.conversation.length}")
+    private long minipilotConversationLength;
     
     @Autowired
     private final JedisPooled jedisPooled;
@@ -76,6 +88,7 @@ public class ChatRestController {
     public ResponseBodyEmitter ask(@RequestParam(value = "q") String q, HttpServletRequest request, HttpServletResponse response) {
 		response.setContentType("text/plain");  
 		ResponseBodyEmitter emitter = new ResponseBodyEmitter();
+		long startTime = System.currentTimeMillis();
         
         // https://github.com/langchain4j/langchain4j-examples/blob/69bc2bfb1d7b6c539c3a176912bc106dba6d5a75/other-examples/src/main/java/ChatWithDocumentsExamples.java
         ChatLanguageModel chatLanguageModel = OpenAiChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
@@ -117,14 +130,14 @@ public class ChatRestController {
 			return emitter;
 		}
 
-        
+        // Dimension for RedisEmbeddingStore should not be required if the index exists 
+        // https://github.com/langchain4j/langchain4j/issues/1618
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
                 .host(host)
                 .user("default")
                 .port(port)
                 .indexName(idx)
                 .dimension(1536)
-                //.metadataFieldsName(metadata)
                 .build();
         
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
@@ -155,6 +168,7 @@ public class ChatRestController {
                 .streamingChatLanguageModel(streamingChatLanguageModel)
                 .chatMemoryProvider(chatMemoryProvider)
                 .retrievalAugmentor(retrievalAugmentor)
+                .tools(new RedisSearchTools(idx))
                 .build();
         
         String systemPrompt = jedisPooled.get("minipilot:prompt:system");
@@ -166,10 +180,15 @@ public class ChatRestController {
             											userPrompt,
 									            		q);
             
-        	//TokenStream tokenStream = assistant.chat(q);
             StringBuilder chunks = new StringBuilder();
+            boolean firstTokenReceived = false;
+            AtomicLong ttft = new AtomicLong();
+            AtomicLong etfl = new AtomicLong();
             tokenStream.onNext(responseData -> {
 				try {
+					if (!firstTokenReceived) {
+						ttft.set(System.currentTimeMillis() - startTime);
+					}
 					emitter.send(responseData);
 					chunks.append(responseData);
 				} catch (IOException e) {
@@ -178,6 +197,7 @@ public class ChatRestController {
 			})
             	.onComplete(responseData -> {
             		emitter.complete();
+            		etfl.set(System.currentTimeMillis() - startTime);
             		
             		// Limitation here https://docs.langchain4j.dev/tutorials/chat-memory/
             		// LangChain4j currently offers only "memory", not "history". If you need to keep an entire history, please do so manually.
@@ -186,8 +206,13 @@ public class ChatRestController {
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));
             		
-            		
-            	})
+                    Map<String, String> data = new HashMap<>();
+                    data.put("session", request.getSession().getId());
+                    data.put("question", q);
+                    data.put("answer", finalAnswer);
+                    data.put("ttft", String.valueOf(ttft));
+                    data.put("etfl", String.valueOf(etfl));
+                    jedisPooled.xadd("minipilot:conversation", data, XAddParams.xAddParams().maxLen(minipilotConversationLength));            	})
             	.onError(emitter::completeWithError)  
             	.start();  // Start the streaming process
 
@@ -239,33 +264,39 @@ public class ChatRestController {
 	public String askGet() {
 	    return "This endpoint only supports POST requests.";
 	}
-    
+}
+
+
+class RedisSearchTools {
 	
-	/*
-	// https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/memory/chat/redis/RedisChatMemoryStore.java
-    static class PersistentChatMemoryStore implements ChatMemoryStore {
+    @Autowired
+    private final JedisPooled jedisPooled;
+    
+    private final String indexName;
+    
+    @Autowired
+    public RedisSearchTools(String indexName) {
+		this.jedisPooled = new JedisPooled();
+		this.indexName = indexName;
 
-        private final DB db = DBMaker.fileDB("multi-user-chat-memory.db").transactionEnable().make();
-        private final Map<Integer, String> map = db.hashMap("messages", INTEGER, STRING).createOrOpen();
-
-        @Override
-        public List<ChatMessage> getMessages(Object memoryId) {
-            String json = map.get((int) memoryId);
-            return messagesFromJson(json);
-        }
-
-        @Override
-        public void updateMessages(Object memoryId, List<ChatMessage> messages) {
-            String json = messagesToJson(messages);
-            map.put((int) memoryId, json);
-            db.commit();
-        }
-
-        @Override
-        public void deleteMessages(Object memoryId) {
-            map.remove((int) memoryId);
-            db.commit();
-        }
     }
-	*/
+	
+	
+	@Tool("Calculate the average of the desired field")
+	public float average(String field) {
+		AggregationBuilder r = new AggregationBuilder("*");
+		r.groupBy(new Group().reduce(Reducers.avg(field).as("avg_field")));
+		AggregationResult res = jedisPooled.ftAggregate(indexName, r);	
+	    return  Float.parseFloat(res.getRow(0).getString("avg_field"));
+	}
+	
+	
+	@Tool("Find entries with score bigger than")
+	public List<Document> popular(float score) {
+		Query q = new Query(String.format("@score:[%s +inf]", score));
+		q.returnFields("$.names");
+		q.limit(0, 100);
+		List<Document> res = jedisPooled.ftSearch(indexName, q).getDocuments();
+	    return res;
+	}
 }

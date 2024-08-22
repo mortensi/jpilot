@@ -108,13 +108,13 @@
 			                        </td>
 			                        <td>
 			                            <div th:if="${!idx.get('is_current')}">
-			                            <a class="mr-5" th:href="@{/data/current/{name}(name=${idx.get('name')})}">
-			                                Make current
-			                            </a>
+				                            <a class="mr-5" th:href="@{/data/current/{name}(name=${idx.get('name')})}">
+				                                Make current
+				                            </a>
+			                            </div>
 			                            <a class="delete_idx_anchor" th:href="@{/data/delete/{name}(name=${idx.get('name')})}">
 			                                Delete
 			                            </a>
-			                            </div>
 			                        </td>
 			                    </tr>
 			                    </tbody>
