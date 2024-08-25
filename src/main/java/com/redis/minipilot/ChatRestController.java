@@ -1,6 +1,7 @@
 package com.redis.minipilot;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
@@ -48,9 +50,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.exceptions.JedisDataException;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.XAddParams;
 import redis.clients.jedis.search.Document;
 import redis.clients.jedis.search.Query;
+import redis.clients.jedis.search.Schema;
 import redis.clients.jedis.search.aggr.AggregationBuilder;
 import redis.clients.jedis.search.aggr.AggregationResult;
 import redis.clients.jedis.search.aggr.Group;
@@ -85,7 +89,7 @@ public class ChatRestController {
 
 	@PostMapping(value = "/ask", produces = "text/plain")
     @ResponseBody
-    public ResponseBodyEmitter ask(@RequestParam(value = "q") String q, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseBodyEmitter ask(@RequestParam(value = "q") String q, HttpServletRequest request, HttpServletResponse response) throws IOException {
 		response.setContentType("text/plain");  
 		ResponseBodyEmitter emitter = new ResponseBodyEmitter();
 		long startTime = System.currentTimeMillis();
@@ -97,6 +101,7 @@ public class ChatRestController {
 	        .apiKey(System.getenv("OPENAI_API_KEY"))
 	        .logRequests(true)
 	        .logResponses(true)
+	        .modelName("gpt-4o")
 	        .build();
         
         // https://github.com/langchain4j/langchain4j-examples/blob/main/rag-examples/src/main/java/_3_advanced/_01_Advanced_RAG_with_Query_Compression_Example.java
@@ -143,8 +148,8 @@ public class ChatRestController {
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(2)
-                .minScore(0.6)
+                .maxResults(5)
+                .minScore(0.8)
                 .build();
         
         RetrievalAugmentor retrievalAugmentor = DefaultRetrievalAugmentor.builder()
@@ -171,6 +176,24 @@ public class ChatRestController {
                 .tools(new RedisSearchTools(idx))
                 .build();
         
+        /*
+        Object schema = readIndexSchema(idx);
+        System.out.println(schema);
+        OpenAiChatModel model = OpenAiChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
+        String answer = model.generate(String.format("based on this Redis index name %s, this schema %s, and based on this question %s, generate a redis-cli command only, without additional information, to retrieve the data using FT.SEARCH or FT.AGGREGATE. Keep the index name as provided, so keep the underscores.", 
+        												idx,
+        												schema,
+        												q));
+        
+        System.out.println(answer);
+        emitter.send(answer);
+        
+        if (true) {
+        	return emitter;
+        }
+        */
+        
+        
         String systemPrompt = jedisPooled.get("minipilot:prompt:system");
         String userPrompt = jedisPooled.get("minipilot:prompt:user");
         
@@ -189,6 +212,7 @@ public class ChatRestController {
 					if (!firstTokenReceived) {
 						ttft.set(System.currentTimeMillis() - startTime);
 					}
+					System.out.println(responseData);
 					emitter.send(responseData);
 					chunks.append(responseData);
 				} catch (IOException e) {
@@ -218,6 +242,7 @@ public class ChatRestController {
 
         } catch (Exception e) {
             emitter.completeWithError(e);  
+        	//emitter.send("Network issue, retry later");
         }
         
         return emitter;
@@ -264,6 +289,32 @@ public class ChatRestController {
 	public String askGet() {
 	    return "This endpoint only supports POST requests.";
 	}
+	
+	
+    public List<List<String>> readIndexSchema(String indexName) {
+    	ArrayList<String> indexSchema = (ArrayList<String>) jedisPooled.ftInfo(indexName).get("attributes");
+    	List<List<String>> output = new ArrayList<>();
+        try  {
+        	// [[identifier, $.vector, attribute, vector, type, VECTOR], [identifier, $.text, attribute, text, type, TEXT, WEIGHT, 1], [identifier, $.score, attribute, score, type, NUMERIC]]
+        	
+        	for (Object item : indexSchema) {
+        		ArrayList<String> innerList = (ArrayList<String>) item;
+        		
+        		// skipping vectors, not required for a natural language query
+        		if (!innerList.get(5).equals("VECTOR")) {
+	                ArrayList<String> reduced = new ArrayList<String>();
+	                reduced.add(innerList.get(3));
+	                reduced.add(innerList.get(5));
+	                output.add(reduced);
+        		}
+            }
+
+        } catch (JedisException e) {
+            System.out.println("readIndexSchema error " + e.getMessage());
+        }
+
+        return output;
+    }
 }
 
 
@@ -291,9 +342,12 @@ class RedisSearchTools {
 	}
 	
 	
-	@Tool("Find entries with score bigger than")
-	public List<Document> popular(float score) {
-		Query q = new Query(String.format("@score:[%s +inf]", score));
+	// example FT.SEARCH minipilot_rag_imdb_movies_20240823_173657_idx "@score:[80.0 +inf]" LIMIT 0 100 RETURN 1 $.names
+	@Tool("Find entries having a field bigger than a certain value")
+	public List<Document> popular(
+			@P("The field name") String fieldName,
+			@P("The field value") float fieldValue) {
+		Query q = new Query(String.format("@%s:[%s +inf]", fieldName, fieldValue));
 		q.returnFields("$.names");
 		q.limit(0, 100);
 		List<Document> res = jedisPooled.ftSearch(indexName, q).getDocuments();

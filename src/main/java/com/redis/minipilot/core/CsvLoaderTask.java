@@ -1,7 +1,8 @@
 package com.redis.minipilot.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.opencsv.CSVReader;
+import com.opencsv.exceptions.CsvValidationException;
 
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
@@ -97,6 +98,7 @@ public class CsvLoaderTask {
         // https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisSchema.java#L51
         // This prevents from running NUMERIC or GEO or any other kind of advanced RAG query
         // https://github.com/langchain4j/langchain4j/discussions/1612
+        // https://github.com/langchain4j/langchain4j/issues/1613
         // For the time being, let's comment metadataKeys
         
         OpenAiEmbeddingModel embeddingModel = null;
@@ -132,8 +134,9 @@ public class CsvLoaderTask {
         attr.put("INITIAL_CAP", 5);
         Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector")
         							.addTextField("$.text", 1.0).as("text")
+        							.addTextField("$.names", 1.0).as("title")
         							.addNumericField("$.score").as("score");
-        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {"embedding:"});
+        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {String.format("minipilot:embedding:%s",indexName)});
         jedisPooled.ftCreate(indexName, IndexOptions.defaultOptions().setDefinition(def), schema);
         
         
@@ -156,7 +159,9 @@ public class CsvLoaderTask {
         	FileReader fileReader = new FileReader(filename);
             Scanner scanner = new Scanner(fileReader);
 
-            List<Map<String, String>> csvData = readCSV(scanner);
+            //List<Map<String, String>> csvData = readCSV(scanner);
+            
+            List<Map<String, String>> csvData = readCSV2(filename);
             
             int cnt = 0;
             for (Map<String, String> row : csvData) {
@@ -170,7 +175,7 @@ public class CsvLoaderTask {
                 fields.put("vector", embeddingModel.embed(rowStr).content().vector());
                 fields.put("score", Float.parseFloat(row.get("score")));
                 fields.put("names", row.get("names"));
-                jedisPooled.jsonSetWithEscape("embedding:" + UUID.randomUUID().toString(), Path2.of("$"), fields);
+                jedisPooled.jsonSetWithEscape(String.format("minipilot:embedding:%s:%s",indexName, UUID.randomUUID().toString()), Path2.of("$"), fields);
                 
                 // This is an example of ingestor with metadata, but unfortunately ingested metadata is only indexed as TEXT
                 // Document movieWithMetadata = createFromCSVLine(row, List.of("score"));
@@ -181,7 +186,7 @@ public class CsvLoaderTask {
                 // Document movie = new Document(rowStr);
                 // ingestor.ingest(movie);
                 cnt++;
-                if (cnt == 10) {
+                if (cnt == 150) {
                 	break;
                 }
             }
@@ -190,7 +195,10 @@ public class CsvLoaderTask {
 	    catch (IOException e) {
 	    	System.out.println("Error reading CSV file");
 	    	return;
-	    }
+	    } catch (CsvValidationException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
         
         System.out.println("Done loading CSV with LangChain4J");
     }
@@ -221,10 +229,34 @@ public class CsvLoaderTask {
             Map<String, String> row = new HashMap<>();
             for (int i = 0; i < headers.length; i++) {
                 row.put(headers[i], values[i]);
+                System.out.println(headers[i]);
+                System.out.println(values[i]);
             }
             rows.add(row);
         }
         return rows;
+    }
+    
+    
+    private static List<Map<String, String>> readCSV2(String filename) throws IOException, CsvValidationException {
+    	List<Map<String, String>> rows = new ArrayList<>();
+        try (CSVReader reader = new CSVReader(new FileReader(filename))) {
+            String[] values;
+            String[] header = reader.readNext();
+            while ((values = reader.readNext()) != null) {
+            	Map<String, String> row = new HashMap<>();
+                for (int i = 0; i < header.length; i++) {
+                    row.put(header[i], values[i]);
+                    System.out.println(header[i]);
+                    System.out.println(values[i]);
+                }
+                rows.add(row);
+                System.out.println();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+		return rows;
     }
 
     

@@ -26,11 +26,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.view.RedirectView;
 
 import com.redis.minipilot.core.CsvLoaderTask;
-import com.redis.minipilot.core.FileProcessingUtils;
-import com.redis.minipilot.database.RedisConfig;
 
 import jakarta.servlet.http.HttpServletRequest;
-import redis.clients.jedis.Connection;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.search.Document;
@@ -39,9 +36,6 @@ import redis.clients.jedis.search.Query;
 
 @Controller
 public class DataController {
-    
-    @Autowired
-    private FileProcessingUtils fileProcessingUtils;
     
     @Autowired
     private CsvLoaderTask csvLoaderTask;

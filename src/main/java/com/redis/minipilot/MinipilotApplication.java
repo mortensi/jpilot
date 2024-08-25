@@ -24,7 +24,7 @@ import redis.clients.jedis.search.Schema;
 
 @SpringBootApplication
 @EnableAsync
-@ComponentScan(basePackages = {"com.redis.minipilot", "com.redis.minipilot.database"})
+@ComponentScan(basePackages = {"com.redis.minipilot", "com.redis.minipilot.database", "com.redis.minipilot.core"})
 public class MinipilotApplication implements ApplicationRunner {
     @Autowired
 	FileStorage fs;
