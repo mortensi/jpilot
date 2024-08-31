@@ -49,7 +49,9 @@ public class SemanticCache {
 	        attr.put("DIM", 1536);
 	        attr.put("DISTANCE_METRIC", "COSINE");
 	        attr.put("INITIAL_CAP", 5);
-	        Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector");
+	        Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector")
+	        							.addTextField("$.question", 1.0).as("question")
+	        							.addTextField("$.answer", 1.0).as("answer");
 	        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes("minipilot:cache");
 	        jedisPooled.ftCreate("minipilot_cache_idx", IndexOptions.defaultOptions().setDefinition(def), schema);
 	        System.out.println("minipilot_cache_idx created");
