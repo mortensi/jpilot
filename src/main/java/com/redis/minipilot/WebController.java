@@ -75,7 +75,6 @@ public class WebController {
 	
 	@GetMapping("/")
 	public String chat(@RequestParam(required=false, defaultValue="chat") String name, Model model, HttpServletRequest request) {
-		System.out.println(request.getSession().getId());
         RedisChatMemoryStore store = RedisChatMemoryStore.builder()
         		.host(host)
         		.port(port)

@@ -61,6 +61,7 @@ public class MinipilotApplication implements ApplicationRunner {
 			Schema schema = new Schema().addTextField("description", 1.0).addTagField("filename").addNumericField("uploaded");
 			IndexDefinition def = new IndexDefinition().setPrefixes(new String[] {"minipilot:data:"});
 			jedisPooled.ftCreate("minipilot_data_idx", IndexOptions.defaultOptions().setDefinition(def), schema);
+			System.out.println("minipilot_data_idx created");
 		}
 	}
 

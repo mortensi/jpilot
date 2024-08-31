@@ -1,45 +1,28 @@
 package com.redis.minipilot.core;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 
 import dev.langchain4j.data.document.Document;
-import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiTokenizer;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
-import dev.langchain4j.store.embedding.redis.RedisEmbeddingStore;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.json.Path2;
-import redis.clients.jedis.search.IndexDataType;
 import redis.clients.jedis.search.IndexDefinition;
 import redis.clients.jedis.search.IndexDefinition.Type;
 import redis.clients.jedis.search.IndexOptions;
 import redis.clients.jedis.search.Schema;
-import redis.clients.jedis.search.schemafields.NumericField;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -135,6 +118,8 @@ public class CsvLoaderTask {
         Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector")
         							.addTextField("$.text", 1.0).as("text")
         							.addTextField("$.names", 1.0).as("title")
+        							.addTagField("$.genre").as("genre")
+        							.addNumericField("$.date_x").as("date_x")
         							.addNumericField("$.score").as("score");
         IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {String.format("minipilot:embedding:%s",indexName)});
         jedisPooled.ftCreate(indexName, IndexOptions.defaultOptions().setDefinition(def), schema);
@@ -175,6 +160,8 @@ public class CsvLoaderTask {
                 fields.put("vector", embeddingModel.embed(rowStr).content().vector());
                 fields.put("score", Float.parseFloat(row.get("score")));
                 fields.put("names", row.get("names"));
+                fields.put("genre", row.get("genre"));
+                fields.put("date_x", DateToUnixTimestamp(row.get("date_x")));
                 jedisPooled.jsonSetWithEscape(String.format("minipilot:embedding:%s:%s",indexName, UUID.randomUUID().toString()), Path2.of("$"), fields);
                 
                 // This is an example of ingestor with metadata, but unfortunately ingested metadata is only indexed as TEXT
@@ -218,6 +205,20 @@ public class CsvLoaderTask {
         
         // The \n is added to the end of the content
         return new Document(rowStr.append("\n").toString(), Metadata.from(metadata));
+    }
+    
+    
+    private static long DateToUnixTimestamp(String dateString) {
+    	SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+    	Date date = null;
+		try {
+			date = dateFormat.parse(dateString);
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	long unixTimestamp = date.getTime() / 1000;
+		return unixTimestamp;
     }
     
 

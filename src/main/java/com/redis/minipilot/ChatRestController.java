@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import com.redis.minipilot.core.SemanticCache;
+
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.data.segment.TextSegment;
@@ -48,19 +50,15 @@ import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.XAddParams;
 import redis.clients.jedis.search.Document;
 import redis.clients.jedis.search.Query;
-import redis.clients.jedis.search.Schema;
 import redis.clients.jedis.search.aggr.AggregationBuilder;
 import redis.clients.jedis.search.aggr.AggregationResult;
 import redis.clients.jedis.search.aggr.Group;
-import redis.clients.jedis.search.aggr.Reducer;
 import redis.clients.jedis.search.aggr.Reducers;
-import redis.clients.jedis.search.aggr.SortedField;
 
 
 @RestController
@@ -81,8 +79,12 @@ public class ChatRestController {
     private final JedisPooled jedisPooled;
     
     @Autowired
+    private final SemanticCache cache;
+    
+    @Autowired
     public ChatRestController() {
 		this.jedisPooled = new JedisPooled();
+		this.cache = new SemanticCache(jedisPooled);
 
     }
 	
@@ -99,8 +101,8 @@ public class ChatRestController {
         
         OpenAiStreamingChatModel streamingChatLanguageModel = OpenAiStreamingChatModel.builder()
 	        .apiKey(System.getenv("OPENAI_API_KEY"))
-	        .logRequests(true)
-	        .logResponses(true)
+	        .logRequests(false)
+	        .logResponses(false)
 	        .modelName("gpt-4o")
 	        .build();
         
@@ -169,18 +171,58 @@ public class ChatRestController {
                 .chatMemoryStore(store)
                 .build();
         
+		List<Document> docs = cache.isInCache(q);
+		if (!docs.isEmpty()) {
+			String cachedAnswer = (String) docs.get(0).get("$.answer");
+			emitter.send(cachedAnswer);
+			
+			// even if cached, add to user conversation
+    		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
+    		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(cachedAnswer));
+			return emitter;
+		}
+        
         Assistant2 assistant = AiServices.builder(Assistant2.class)
                 .streamingChatLanguageModel(streamingChatLanguageModel)
                 .chatMemoryProvider(chatMemoryProvider)
                 .retrievalAugmentor(retrievalAugmentor)
-                .tools(new RedisSearchTools(idx))
+                //.tools(new RedisSearchTools(idx))
                 .build();
+                
+        OpenAiChatModel functionRequiredModel = OpenAiChatModel.builder()
+    	        .apiKey(System.getenv("OPENAI_API_KEY"))
+    	        .logRequests(true)
+    	        .logResponses(true)
+    	        .modelName("gpt-4o")
+    	        .build();
         
+        //FunctionRequired functionRequired = AiServices.builder(FunctionRequired.class)
+        //						.chatLanguageModel(model)
+        //						.build();
+        
+        FunctionRequired functionRequired = AiServices.create(FunctionRequired.class, functionRequiredModel);
+        
+        Assistant2 obj = assistant;
+        
+        
+        if (functionRequired.isFunctionRequired(q).toLowerCase().equals("true")) {
+        	System.out.println("Tools are required");
+        	
+            Assistant2 funcAssistant = AiServices.builder(Assistant2.class)
+                    .streamingChatLanguageModel(streamingChatLanguageModel)
+                    .chatMemoryProvider(chatMemoryProvider)
+                    .tools(new RedisSearchTools(idx))
+                    .build();
+            
+            obj = funcAssistant;
+        } 
+        
+       
         /*
         Object schema = readIndexSchema(idx);
         System.out.println(schema);
         OpenAiChatModel model = OpenAiChatModel.withApiKey(System.getenv("OPENAI_API_KEY"));
-        String answer = model.generate(String.format("based on this Redis index name %s, this schema %s, and based on this question %s, generate a redis-cli command only, without additional information, to retrieve the data using FT.SEARCH or FT.AGGREGATE. Keep the index name as provided, so keep the underscores.", 
+        String answer = model.generate(String.format("based on this Redis index name %s, this schema %s, and based on this question %s, you must answer strictly a redis-cli command, without additional information, to retrieve the data using FT.SEARCH or FT.AGGREGATE. Do not add any HTML or markdown formatting", 
         												idx,
         												schema,
         												q));
@@ -198,7 +240,7 @@ public class ChatRestController {
         String userPrompt = jedisPooled.get("minipilot:prompt:user");
         
         try {
-            TokenStream tokenStream = assistant.chat(	"minipilot:memory:" + request.getSession().getId(), 
+            TokenStream tokenStream = obj.chat(	"minipilot:memory:" + request.getSession().getId(), 
             											systemPrompt,
             											userPrompt,
 									            		q);
@@ -212,7 +254,6 @@ public class ChatRestController {
 					if (!firstTokenReceived) {
 						ttft.set(System.currentTimeMillis() - startTime);
 					}
-					System.out.println(responseData);
 					emitter.send(responseData);
 					chunks.append(responseData);
 				} catch (IOException e) {
@@ -230,13 +271,18 @@ public class ChatRestController {
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
             		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));
             		
+            		// Log all the conversations
                     Map<String, String> data = new HashMap<>();
                     data.put("session", request.getSession().getId());
                     data.put("question", q);
                     data.put("answer", finalAnswer);
                     data.put("ttft", String.valueOf(ttft));
                     data.put("etfl", String.valueOf(etfl));
-                    jedisPooled.xadd("minipilot:conversation", data, XAddParams.xAddParams().maxLen(minipilotConversationLength));            	})
+                    jedisPooled.xadd("minipilot:conversation", data, XAddParams.xAddParams().maxLen(minipilotConversationLength));
+                    
+                    // Add to semantic cache
+                    cache.addToCache(q, finalAnswer);
+                })
             	.onError(emitter::completeWithError)  
             	.start();  // Start the streaming process
 
@@ -252,6 +298,15 @@ public class ChatRestController {
     interface Assistant {
     	TokenStream chat(	@MemoryId String memoryId, 
     						@UserMessage String userMessage);
+    }
+    
+    
+    interface FunctionRequired {
+    	// String as a return types, does not append instructions to the end of UserMessage indicating the format in which the LLM should respond
+    	// boolean appends "You must answer strictly in the following format: one of [true, false]" and may fail, as it return sometimes
+    	// [true] rather than true, which is interpreted as false
+        @UserMessage("Is this question asking to calculate an average of the score, or searching a movie by genre? The question is: \"{{it}}\" Reply strictly with true or false")
+        String isFunctionRequired(String text);
     }
     
     
@@ -333,6 +388,7 @@ class RedisSearchTools {
     }
 	
 	
+    // example FT.AGGREGATE minipilot_rag_imdb_movies_20240826_012558_idx * GROUPBY 0 REDUCE AVG 1 score AS avg_field
 	@Tool("Calculate the average of the desired field")
 	public float average(String field) {
 		AggregationBuilder r = new AggregationBuilder("*");
@@ -342,7 +398,18 @@ class RedisSearchTools {
 	}
 	
 	
-	// example FT.SEARCH minipilot_rag_imdb_movies_20240823_173657_idx "@score:[80.0 +inf]" LIMIT 0 100 RETURN 1 $.names
+	@Tool("Search movies by genre")
+	public List<Document> genre(
+			@P("The genre") String theGenre) {
+		Query q = new Query(String.format("@genre:{%s}", theGenre));
+		q.returnFields("$.names");
+		q.limit(0, 100);
+		List<Document> res = jedisPooled.ftSearch(indexName, q).getDocuments();
+	    return res;
+	}
+	
+	
+	// example FT.SEARCH minipilot_rag_imdb_movies_20240826_012558_idx "@score:[80.0 +inf]" LIMIT 0 100 RETURN 1 $.names
 	@Tool("Find entries having a field bigger than a certain value")
 	public List<Document> popular(
 			@P("The field name") String fieldName,
