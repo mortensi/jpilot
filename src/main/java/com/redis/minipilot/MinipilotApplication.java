@@ -31,7 +31,7 @@ public class MinipilotApplication implements ApplicationRunner {
     
     private final JedisPooled jedisPooled;
     
-    private static final Logger log = LoggerFactory.getLogger(MinipilotApplication.class);
+    private static final Logger logger = LoggerFactory.getLogger(MinipilotApplication.class);
     
     @Autowired
     public MinipilotApplication(JedisPooled jedisPooled) {
@@ -47,6 +47,8 @@ public class MinipilotApplication implements ApplicationRunner {
 	public void run(ApplicationArguments args) throws Exception {
 		fs.init();
 		
+		logger.warn("Starting Minipilot");
+		
 		// Initialize prompts
 		if (!jedisPooled.exists("minipilot:prompt:system")) {
 			jedisPooled.set("minipilot:prompt:system", SystemPromptDefault.SYSTEM_TEMPLATE);
@@ -61,7 +63,8 @@ public class MinipilotApplication implements ApplicationRunner {
 			Schema schema = new Schema().addTextField("description", 1.0).addTagField("filename").addNumericField("uploaded");
 			IndexDefinition def = new IndexDefinition().setPrefixes(new String[] {"minipilot:data:"});
 			jedisPooled.ftCreate("minipilot_data_idx", IndexOptions.defaultOptions().setDefinition(def), schema);
-			System.out.println("minipilot_data_idx created");
+			//System.out.println("minipilot_data_idx created");
+			logger.info("minipilot_data_idx created");
 		}
 	}
 

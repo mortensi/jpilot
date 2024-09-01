@@ -14,6 +14,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -41,6 +43,8 @@ public class DataController {
     private CsvLoaderTask csvLoaderTask;
     
     private final JedisPooled jedisPooled;
+    
+    private static final Logger logger = LoggerFactory.getLogger(MinipilotApplication.class);
     
     @Autowired
     public DataController(JedisPooled jedisPooled) {
@@ -76,7 +80,6 @@ public class DataController {
 		}
         
         Set<String> indexes = jedisPooled.ftList(); // Adjust this according to how you retrieve this list
-        System.out.println(indexes);
 
         // Filter for indexes starting with "minipilot_rag"
         List<String> ragIndexes = indexes.stream()
@@ -113,6 +116,7 @@ public class DataController {
                                    RedirectAttributes redirectAttributes) {
         if (file.isEmpty()) {
             System.out.println("No selected file");
+            logger.warn("No selected file");
             return "redirect:/data";
         }
 
@@ -121,6 +125,7 @@ public class DataController {
             String filename = file.getOriginalFilename();
             if (filename == null || filename.isEmpty()) {
                 System.out.println("No selected file");
+                logger.warn("No selected file");
                 return "redirect:/data";
             }
 

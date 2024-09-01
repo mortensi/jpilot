@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import static dev.langchain4j.data.message.UserMessage.userMessage;
 import static dev.langchain4j.data.message.AiMessage.aiMessage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -76,8 +78,9 @@ public class ChatRestController {
     private long minipilotConversationLength;
     
     private final JedisPooled jedisPooled;
-    
     private final SemanticCache cache;
+    
+    private static final Logger logger = LoggerFactory.getLogger(MinipilotApplication.class);
     
     @Autowired
     public ChatRestController(JedisPooled jedisPooled, SemanticCache semanticCache) {
@@ -126,6 +129,7 @@ public class ChatRestController {
         }
 		catch (JedisDataException e) {
 			System.out.println("The minipilot_data_idx alias does not exist");
+			logger.warn("The minipilot_data_idx alias does not exist");
 			try {
 				emitter.send("You must associate the alias to an index");
 			} catch (IOException e1) {
