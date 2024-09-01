@@ -1,31 +1,51 @@
-package com.redis.minipilot;
+package com.redis.minipilot.utils;
 
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.params.XAddParams;
 
 import java.util.HashMap;
 import java.util.Map;
 
+
 public class RedisStreamAppender extends AppenderBase<ILoggingEvent> {
 
     private JedisPooled jedisPooled;
+	
     private String streamName = "minipilot:logging";
-    private String redisHost = "localhost";  // Default host, change if necessary
-    private int redisPort = 6379;            // Default port, change if necessary
     private long maxStreamLength = 1000;
+    
 
     public RedisStreamAppender() {
         // Default no-arg constructor, necessary for Logback
     }
+    
 
     @Override
     public void start() {
         super.start();
         try {
             // Initialize JedisPooled here instead of using @Autowired
-            this.jedisPooled = new JedisPooled(redisHost, redisPort);
+        	// RedisStreamAppender is not a Spring-managed bean by default
+        	// it is used by Logback, which initializes its appenders independently of Spring's context
+            String host = System.getenv("REDIS_HOST") != null ? System.getenv("REDIS_HOST") : "localhost"; 
+            int port = System.getenv("REDIS_PORT") != null ? Integer.parseInt(System.getenv("REDIS_PORT")) : 6379; 
+            String password = System.getenv("REDIS_PASSWORD") != null ? System.getenv("REDIS_PASSWORD") : ""; 
+            
+        	HostAndPort hostAndPort = new HostAndPort(host, port);
+        	DefaultJedisClientConfig.Builder configBuilder = DefaultJedisClientConfig.builder();
+
+        	// Conditionally set the password
+        	if (password != null && !password.isEmpty()) {
+        	    configBuilder.password(password);
+        	}
+
+        	DefaultJedisClientConfig config = configBuilder.build();
+            
+            this.jedisPooled = new JedisPooled(hostAndPort, config);
         } catch (Exception e) {
             addError("Failed to initialize Redis connection", e);
         }
@@ -64,17 +84,5 @@ public class RedisStreamAppender extends AppenderBase<ILoggingEvent> {
         } catch (Exception e) {
             addError("Error sending log message to Redis", e);
         }
-    }
-
-    public void setStreamName(String streamName) {
-        this.streamName = streamName;
-    }
-
-    public void setRedisHost(String redisHost) {
-        this.redisHost = redisHost;
-    }
-
-    public void setRedisPort(int redisPort) {
-        this.redisPort = redisPort;
     }
 }

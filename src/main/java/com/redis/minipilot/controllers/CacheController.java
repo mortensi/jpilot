@@ -1,4 +1,4 @@
-package com.redis.minipilot;
+package com.redis.minipilot.controllers;
 
 import java.util.ArrayList;
 import java.util.HashMap;

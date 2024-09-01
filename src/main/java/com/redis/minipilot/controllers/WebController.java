@@ -1,4 +1,4 @@
-package com.redis.minipilot;
+package com.redis.minipilot.controllers;
 
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +14,6 @@ import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.resps.StreamEntry;
-import redis.clients.jedis.search.Document;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -88,25 +87,6 @@ public class WebController {
 		model.addAttribute("logs", logs);
 		return "logger";
 	}
-	
-	
-	@GetMapping("/prompt")
-	public String prompt(@RequestParam(name="name", required=false, defaultValue="prompt") String name, Model model) {
-		model.addAttribute("system", jedisPooled.get("minipilot:prompt:system"));
-		model.addAttribute("user", jedisPooled.get("minipilot:prompt:user"));
-		return "prompt";
-	}
-	
-    @PostMapping("/prompt/save")
-    public String savePrompt(@RequestParam("prompt") String prompt, @RequestParam("type") String type) {
-        if ("system".equals(type)) {
-        	jedisPooled.set("minipilot:prompt:system", prompt);
-        } else if ("user".equals(type)) {
-        	jedisPooled.set("minipilot:prompt:user", prompt);
-        }
-
-        return "redirect:/prompt";  
-    }
 	
 	
     //@RequestMapping("/error")

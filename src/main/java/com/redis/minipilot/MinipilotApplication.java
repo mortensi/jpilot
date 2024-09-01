@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 import com.redis.minipilot.core.SystemPromptDefault;
 import com.redis.minipilot.core.UserPromptDefault;
+import com.redis.minipilot.utils.FileStorage;
 
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.search.IndexDefinition;
@@ -24,7 +25,7 @@ import redis.clients.jedis.search.Schema;
 
 @SpringBootApplication
 @EnableAsync
-@ComponentScan(basePackages = {"com.redis.minipilot", "com.redis.minipilot.database", "com.redis.minipilot.core"})
+@ComponentScan(basePackages = {"com.redis.minipilot", "com.redis.minipilot.controllers", "com.redis.minipilot.database", "com.redis.minipilot.core"})
 public class MinipilotApplication implements ApplicationRunner {
     @Autowired
 	FileStorage fs;

@@ -13,7 +13,7 @@
     </appender>
 
     <!-- RedisStream appender configuration -->
-    <appender name="REDIS" class="com.redis.minipilot.RedisStreamAppender">
+    <appender name="REDIS" class="com.redis.minipilot.utils.RedisStreamAppender">
         <redisHost>${redisHost}</redisHost>
         <redisPort>${redisPort}</redisPort>
         <streamName>${streamName}</streamName>

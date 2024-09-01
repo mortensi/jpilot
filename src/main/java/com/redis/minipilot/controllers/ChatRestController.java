@@ -1,4 +1,4 @@
-package com.redis.minipilot;
+package com.redis.minipilot.controllers;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
+import com.redis.minipilot.MinipilotApplication;
 import com.redis.minipilot.core.SemanticCache;
 
 import dev.langchain4j.agent.tool.P;

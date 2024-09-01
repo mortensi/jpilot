@@ -1,4 +1,4 @@
-package com.redis.minipilot;
+package com.redis.minipilot.controllers;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.view.RedirectView;
 
+import com.redis.minipilot.MinipilotApplication;
 import com.redis.minipilot.core.CsvLoaderTask;
 
 import jakarta.servlet.http.HttpServletRequest;
