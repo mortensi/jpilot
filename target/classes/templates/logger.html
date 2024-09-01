@@ -15,8 +15,11 @@
 			        <div class="column"></div>
 			        <div class="column is-two-thirds">
 			            <h1 id="name" class="title is-4 pb-3">Logger</h1>
-			   
-
+			            <pre style="line-height: 1;">
+				   			<ul>
+							    <li th:each="item : ${logs}" th:text="${item}"></li>
+							</ul>
+						</pre>
 			        </div>
 			        <div class="column"></div>
 			    </div>

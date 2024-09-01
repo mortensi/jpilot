@@ -13,6 +13,8 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.search.Document;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -74,8 +76,16 @@ public class WebController {
 	
 	
 	@GetMapping("/logger")
-	public String logger(@RequestParam(name="name", required=false, defaultValue="logger") String name, Model model) {
-		model.addAttribute("name", name);
+	public String logger(Model model) {
+		
+		List<StreamEntry> entries = jedisPooled.xrange("minipilot:logging", "-", "+");
+		List<String> logs = new ArrayList<>();
+		
+		for (StreamEntry entry : entries) {
+			logs.add(entry.getFields().toString());
+		}
+		
+		model.addAttribute("logs", logs);
 		return "logger";
 	}
 	
