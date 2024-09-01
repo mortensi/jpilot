@@ -20,8 +20,6 @@ import redis.clients.jedis.search.IndexOptions;
 import redis.clients.jedis.search.Schema;
 
 
-// https://stackoverflow.com/questions/46617044/how-to-use-autowired-autowired-references-from-mainstring-args-method
-
 
 @SpringBootApplication
 @EnableAsync
