@@ -75,16 +75,14 @@ public class ChatRestController {
     @Value("${minipilot.conversation.length}")
     private long minipilotConversationLength;
     
-    @Autowired
     private final JedisPooled jedisPooled;
     
-    @Autowired
     private final SemanticCache cache;
     
     @Autowired
-    public ChatRestController() {
-		this.jedisPooled = new JedisPooled();
-		this.cache = new SemanticCache(jedisPooled);
+    public ChatRestController(JedisPooled jedisPooled, SemanticCache semanticCache) {
+		this.jedisPooled = jedisPooled;
+		this.cache = semanticCache;
 
     }
 	

@@ -1,7 +1,8 @@
 <!DOCTYPE HTML>
 <html xmlns:th="http://www.thymeleaf.org">
 <head> 
-    <title>minipilot</title> 
+    <title>Minipilot</title> 
+    <link rel="shortcut icon" th:href="@{/images/favicon-32x32.png}" type="image/x-icon" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
@@ -12,9 +13,7 @@
     <div id="wrapper">
         <section>
 			<div th:replace="fragments/header :: headerFragment"></div>
-            <div class="container mt-6 mb-6" style="padding-left:20px; padding-right:20px;">
-            
-			<div class='container pb-2 px-5' xmlns="http://www.w3.org/1999/html">
+            <div class="container p-5 mt-6 mb-6">
 			    <div class="columns">
 			        <div class="column"></div>
 			        <div class="column is-two-thirds">
@@ -127,7 +126,6 @@
 			        </div>
 			        <div class="column"></div>
 			    </div>
-
             </div>
         </section>
     </div>

@@ -40,13 +40,11 @@ public class DataController {
     @Autowired
     private CsvLoaderTask csvLoaderTask;
     
-    @Autowired
     private final JedisPooled jedisPooled;
     
     @Autowired
-    public DataController() {
-		this.jedisPooled = new JedisPooled();
-
+    public DataController(JedisPooled jedisPooled) {
+        this.jedisPooled = jedisPooled;
     }
 	
 	

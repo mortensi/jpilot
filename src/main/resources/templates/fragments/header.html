@@ -3,10 +3,10 @@
 <head></head>
 <body>
     <div th:fragment="headerFragment">
-        <h1>Welcome to My Web Page</h1>
+
         <nav class="p-1 mb-2 navbar is-transparent is-fixed-top" role="navigation" aria-label="main navigation">
             <div class="navbar-brand mr-6">
-                <a href="{{ url_for('minipilot_bp.landing') }}" class="navbar-item" style="width:102px;color:rgb(213 45 31);">
+                <a th:href="@{/}" class="navbar-item" style="width:102px;color:rgb(213 45 31);">
                     <img th:src="@{/images/minipilot.png}" alt="Logo">
                 </a>
                 <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" style="margin:0 0 0 auto">

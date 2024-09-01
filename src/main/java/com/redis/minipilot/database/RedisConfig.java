@@ -1,17 +1,12 @@
 package com.redis.minipilot.database;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import redis.clients.jedis.Connection;
-import redis.clients.jedis.ConnectionPoolConfig;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.UnifiedJedis;
 
 @Configuration
 public class RedisConfig {
@@ -28,6 +23,7 @@ public class RedisConfig {
 
     @Bean
     public JedisPooled jedisPooled() {
+    	System.out.println("JedisPooled bean has been instantiated");
     	HostAndPort hostAndPort = new HostAndPort(host, port);
     	DefaultJedisClientConfig.Builder configBuilder = DefaultJedisClientConfig.builder();
 
