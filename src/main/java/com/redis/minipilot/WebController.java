@@ -6,18 +6,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.view.RedirectView;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.redis.RedisChatMemoryStore;
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.json.Path2;
-import redis.clients.jedis.search.Document;
-import redis.clients.jedis.search.Query;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -76,62 +71,6 @@ public class WebController {
         model.addAttribute("conversation", messageList);
 		return "chat";
 	}
-	
-	
-    @GetMapping("/cache") 
-    public String cache(
-        @RequestParam(name = "q", required = false) String query,  
-        @RequestParam(name = "s", defaultValue = "semantic", required = false) String searchType,  
-        Model model) { 
-    	
-    	Query q = null;
-    	
-    	if (query == null || query.contentEquals("")) {
-    		q = new Query();
-    	}
-    	else {
-    		q = new Query(String.format("@question:(%s)", query));
-    	}
-    	
-		String[] fields = {"answer", "question"};
-		q.returnFields(fields);
-		q.limit(0, 100);
-		List<Document> res = jedisPooled.ftSearch("minipilot_cache_idx", q).getDocuments();
-		List<HashMap<String, String>> entries = new ArrayList<>();
-		
-		for (Document document : res) {
-	        HashMap<String, String> entry = new HashMap<>();
-        	String[] parts = document.getId().split(":");
-        	entry.put("id", parts[parts.length - 1]);
-	        entry.put("question", document.get("question").toString());
-	        entry.put("answer", document.get("answer").toString());
-	        entries.add(entry);
-		}
-    	
-    	model.addAttribute("q", query);
-    	model.addAttribute("s", searchType);
-    	model.addAttribute("entries", entries);
-		return "cache";
-	}
-    
-    
-    @GetMapping("/cache/delete/{id}")
-    public String deleteCache(@PathVariable("id") String id) {
-    	jedisPooled.del(String.format("minipilot:cache:%s", id));
-    	return "redirect:/cache"; 
-	}
-    
-    
-    @PostMapping("/cache/save")
-    public RedirectView saveCache(	@RequestParam(name = "id", required = false) String id, 
-    								@RequestParam(name = "content", required = false) String content, 
-    								HttpServletRequest request) {
-    	if (id != null) {    	
-    		jedisPooled.jsonSetWithEscape(String.format("minipilot:cache:%s", id), Path2.of("$.answer"), content);
-    	
-    	}
-    	return new RedirectView(request.getHeader("Referer"));
-    }
 	
 	
 	@GetMapping("/logger")

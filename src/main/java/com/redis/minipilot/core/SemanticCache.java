@@ -82,6 +82,21 @@ public class SemanticCache {
     }
     
     
+    public List<Document> semanticSearch(String q, int K) {
+    	String[] fields = {"answer", "question"};
+    	Query query = new Query("@vector:[VECTOR_RANGE $radius $query_vector]=>{$YIELD_DISTANCE_AS: dist_field}").
+    	                    addParam("radius", 0.1).
+    	                    addParam("query_vector", toByteArray(embeddingModel.embed(q).content().vector())).
+    	                    setSortBy("dist_field", true).
+    	                    returnFields(fields).
+    	                    limit(0,K).
+    	                    dialect(2);
+
+    	List<Document> res = jedisPooled.ftSearch("minipilot_cache_idx", query).getDocuments();
+    	return res;
+    }
+    
+    
     public void addToCache(String q, String answer) {
         Map<String, Object> fields = new HashMap<>();
         fields.put("question", q);
