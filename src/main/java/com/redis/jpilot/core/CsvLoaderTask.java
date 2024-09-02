@@ -2,11 +2,14 @@ package com.redis.jpilot.core;
 
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
+import com.redis.jpilot.JpilotApplication;
 
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -46,6 +49,8 @@ public class CsvLoaderTask {
     public CsvLoaderTask(JedisPooled jedisPooled) {
         this.jedisPooled = jedisPooled;
     }
+    
+    private static final Logger logger = LoggerFactory.getLogger(JpilotApplication.class);
 
 
     public void load(String filename) {
@@ -71,18 +76,12 @@ public class CsvLoaderTask {
         // 8191 x 4 = 32764 maximum characters that can be represented by a vector embedding
         // choosing 10000 as chunk size seems ok
         
-        // https://github.com/langchain4j/langchain4j-examples/blob/main/redis-example/src/main/java/RedisEmbeddingStoreExample.java
-        // Note that it is not possible to indicate a prefix for the index, which means that everything ingested will be indexed
-        // Which also means that an application can be single-indexed and the Redis alias is meaningless
-        // https://github.com/langchain4j/langchain4j/issues/1340
-        // https://github.com/langchain4j/langchain4j/pull/1347
-        
-        // It seems like metadata is indexed as TEXT only, according to the implementation in toSchemaFields
+        // As of August 2024, metadata is indexed as TEXT only, according to the implementation in toSchemaFields
         // https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisSchema.java#L51
         // This prevents from running NUMERIC or GEO or any other kind of advanced RAG query
         // https://github.com/langchain4j/langchain4j/discussions/1612
         // https://github.com/langchain4j/langchain4j/issues/1613
-        // For the time being, let's comment metadataKeys
+        // For the time being, comment metadataKeys in RedisEmbeddingStore, if using it
         
         OpenAiEmbeddingModel embeddingModel = null;
         try {
@@ -94,6 +93,12 @@ public class CsvLoaderTask {
         }
         
         /*
+        // https://github.com/langchain4j/langchain4j-examples/blob/main/redis-example/src/main/java/RedisEmbeddingStoreExample.java
+        // Note that it is not possible to indicate a prefix for the index, which means that everything ingested will be indexed
+        // Which also means that an application can be single-indexed and the Redis alias is meaningless
+        // Because of this, we are using ftCreate directly below
+        // https://github.com/langchain4j/langchain4j/issues/1340
+        // https://github.com/langchain4j/langchain4j/pull/1347
         EmbeddingStore<TextSegment> embeddingStore = RedisEmbeddingStore.builder()
                 .host(host)
                 .user("default")
@@ -141,41 +146,34 @@ public class CsvLoaderTask {
         // Load CSV and index the content
         try  {
         	System.out.println("Reading CSV file " + filename);
-        	FileReader fileReader = new FileReader(filename);
-            Scanner scanner = new Scanner(fileReader);
-
-            //List<Map<String, String>> csvData = readCSV(scanner);
+            List<Map<String, String>> csvData = readCSV(filename);
             
-            List<Map<String, String>> csvData = readCSV2(filename);
-            
-            int cnt = 0;
             for (Map<String, String> row : csvData) {
                 String rowStr = rowToString(row);
+                logger.info(rowStr);
                 
-                System.out.println(row);
-                
-                // This is my low-level ingestion
+                // This is my low-level ingestion to sort out the issues described in the comments
+                // Not adding metadata to make the demo generic with an arbitrary CSV file
+                // Leaving them commented for demonstrative purposes
+                // Indexing, instead, the entire CSV row serialized to string in rowStr
                 Map<String, Object> fields = new HashMap<>();
                 fields.put("text", rowStr);
                 fields.put("vector", embeddingModel.embed(rowStr).content().vector());
-                fields.put("score", Float.parseFloat(row.get("score")));
-                fields.put("names", row.get("names"));
-                fields.put("genre", row.get("genre"));
-                fields.put("date_x", DateToUnixTimestamp(row.get("date_x")));
+                //fields.put("score", Float.parseFloat(row.get("score")));
+                //fields.put("names", row.get("names"));
+                //fields.put("genre", row.get("genre"));
+                //fields.put("date_x", DateToUnixTimestamp(row.get("date_x")));
                 jedisPooled.jsonSetWithEscape(String.format("jpilot:embedding:%s:%s",indexName, UUID.randomUUID().toString()), Path2.of("$"), fields);
                 
                 // This is an example of ingestor with metadata, but unfortunately ingested metadata is only indexed as TEXT
+                // So, not using as of now
                 // Document movieWithMetadata = createFromCSVLine(row, List.of("score"));
                 // ingestor.ingest(movieWithMetadata);
                 // System.out.println(movieWithMetadata);
                 
-                // This is ingestion without metadata
+                // This is ingestion without metadata, not using because of https://github.com/langchain4j/langchain4j/issues/1340
                 // Document movie = new Document(rowStr);
                 // ingestor.ingest(movie);
-                cnt++;
-                if (cnt == 150) {
-                	break;
-                }
             }
             
         }
@@ -221,25 +219,8 @@ public class CsvLoaderTask {
 		return unixTimestamp;
     }
     
-
-    private static List<Map<String, String>> readCSV(Scanner scanner) throws IOException {
-        List<Map<String, String>> rows = new ArrayList<>();
-        String[] headers = scanner.nextLine().split(",");
-        while (scanner.hasNextLine()) {
-            String[] values = scanner.nextLine().split(",");
-            Map<String, String> row = new HashMap<>();
-            for (int i = 0; i < headers.length; i++) {
-                row.put(headers[i], values[i]);
-                System.out.println(headers[i]);
-                System.out.println(values[i]);
-            }
-            rows.add(row);
-        }
-        return rows;
-    }
     
-    
-    private static List<Map<String, String>> readCSV2(String filename) throws IOException, CsvValidationException {
+    private static List<Map<String, String>> readCSV(String filename) throws IOException, CsvValidationException {
     	List<Map<String, String>> rows = new ArrayList<>();
         try (CSVReader reader = new CSVReader(new FileReader(filename))) {
             String[] values;
