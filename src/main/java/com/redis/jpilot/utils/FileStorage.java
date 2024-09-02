@@ -1,4 +1,4 @@
-package com.redis.minipilot.utils;
+package com.redis.jpilot.utils;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -8,7 +8,7 @@ import java.io.File;
 @Component
 public class FileStorage {
 
-    @Value("${minipilot.assets}")
+    @Value("${jpilot.assets}")
     private String uploadFolder;
     
     public void init() {

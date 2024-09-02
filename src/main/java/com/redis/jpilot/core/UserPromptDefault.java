@@ -1,4 +1,4 @@
-package com.redis.minipilot.core;
+package com.redis.jpilot.core;
 
 public class UserPromptDefault {
     public static final String USER_TEMPLATE = """

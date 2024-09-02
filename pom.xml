@@ -10,10 +10,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.redis</groupId>
-	<artifactId>minipilot</artifactId>
+	<artifactId>jpilot</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>minipilot</name>
-	<description>minipilot GenAI assistant</description>
+	<name>jpilot</name>
+	<description>jPilot GenAI assistant</description>
 	<url/>
 	<licenses>
 		<license/>

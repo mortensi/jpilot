@@ -1,4 +1,4 @@
-package com.redis.minipilot.utils;
+package com.redis.jpilot.utils;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;

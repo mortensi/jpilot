@@ -1,4 +1,4 @@
-package com.redis.minipilot.controllers;
+package com.redis.jpilot.controllers;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,8 +27,9 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.view.RedirectView;
 
-import com.redis.minipilot.MinipilotApplication;
-import com.redis.minipilot.core.CsvLoaderTask;
+import com.redis.jpilot.JpilotApplication;
+import com.redis.jpilot.core.CsvLoaderTask;
+import com.redis.jpilot.core.FileProcessingUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.JedisPooled;
@@ -43,9 +44,12 @@ public class DataController {
     @Autowired
     private CsvLoaderTask csvLoaderTask;
     
+    @Autowired 
+    private FileProcessingUtils fileProcessingUtils;
+    
     private final JedisPooled jedisPooled;
     
-    private static final Logger logger = LoggerFactory.getLogger(MinipilotApplication.class);
+    private static final Logger logger = LoggerFactory.getLogger(JpilotApplication.class);
     
     @Autowired
     public DataController(JedisPooled jedisPooled) {
@@ -61,7 +65,7 @@ public class DataController {
 		q.setSortBy("uploaded", false);
 		q.limit(0, 50);
 		
-		List<Document> docs = jedisPooled.ftSearch("minipilot_data_idx", q).getDocuments();
+		List<Document> docs = jedisPooled.ftSearch("jpilot_data_idx", q).getDocuments();
 		
         for (Document doc : docs) {
         	String[] parts = doc.getId().split(":");
@@ -74,17 +78,17 @@ public class DataController {
         Map<String, Object> idxAliasInfo = null;
         
         try {
-        	idxAliasInfo = jedisPooled.ftInfo("minipilot_rag_alias");
+        	idxAliasInfo = jedisPooled.ftInfo("jpilot_rag_alias");
         }
 		catch (JedisDataException e) {
-			System.out.println("The minipilot_data_idx alias does not exist");
+			System.out.println("The jpilot_data_idx alias does not exist");
 		}
         
         Set<String> indexes = jedisPooled.ftList(); // Adjust this according to how you retrieve this list
 
-        // Filter for indexes starting with "minipilot_rag"
+        // Filter for indexes starting with "jpilot_rag"
         List<String> ragIndexes = indexes.stream()
-            .filter(idx -> idx.startsWith("minipilot_rag"))
+            .filter(idx -> idx.startsWith("jpilot_rag"))
             .collect(Collectors.toList());
 
         // Retrieve information for each filtered index
@@ -130,7 +134,7 @@ public class DataController {
                 return "redirect:/data";
             }
 
-            String path = Paths.get(System.getenv("MINIPILOT_ASSETS"), filename).toString();
+            String path = Paths.get(System.getenv("JPILOT_ASSETS"), filename).toString();
             File destFile = new File(path);
 
             if (destFile.exists()) {
@@ -139,11 +143,11 @@ public class DataController {
 
             // Only CSV accepted as of now
             if (file.getContentType().equals("text/csv")) {
-                Files.copy(file.getInputStream(), Paths.get(System.getenv("MINIPILOT_ASSETS"), filename), StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(file.getInputStream(), Paths.get(System.getenv("JPILOT_ASSETS"), filename), StandardCopyOption.REPLACE_EXISTING);
                 System.out.println("File successfully uploaded");
 
                 // Here you would add logic to save the file metadata to your database
-                String key = "minipilot:data:" + UUID.randomUUID().toString().replace("-", "");
+                String key = "jpilot:data:" + UUID.randomUUID().toString().replace("-", "");
                 
                 jedisPooled.hset(key, "filename", filename);
                 jedisPooled.hset(key, "uploaded", String.valueOf(Instant.now().getEpochSecond()));
@@ -162,25 +166,20 @@ public class DataController {
     @GetMapping("/data/create/{id}")
     public RedirectView createIndex(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
         // Get filename from database
-
-        String filename = jedisPooled.hget("minipilot:data:" + id, "filename");
-        
-        System.out.println(filename);
+        String filename = jedisPooled.hget("jpilot:data:" + id, "filename");
 
         // Construct file path
-        String uploadFolder = System.getenv("MINIPILOT_ASSETS"); // Adjust if needed
+        String uploadFolder = System.getenv("JPILOT_ASSETS"); // Adjust if needed
         String path = Paths.get(uploadFolder, filename).toString();
-
-        // Start background task to handle file processing
-        //processFileAsync(path);
         
         // Use the utility method to process the file asynchronously
-        //fileProcessingUtils.processFileAsync(path);
+        fileProcessingUtils.processFileAsync(path);
 
         // Or use the utility method to process the file synchronously, for debugging
-        csvLoaderTask.load(path);
+        //csvLoaderTask.load(path);
         
-        // Wait for a second to simulate the original behavior (not recommended in production)
+        // Wait for a second so the async job starts and on refresh you can see the index being created
+        // Then refresh the page from time to time to see the progress. TODO update the GUI with the progress
         try {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
@@ -195,10 +194,10 @@ public class DataController {
     
     @GetMapping("/data/remove/{id}")
     public RedirectView removeFile(@PathVariable("id") String id, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-        String filename = jedisPooled.hget("minipilot:data:" + id, "filename");
+        String filename = jedisPooled.hget("jpilot:data:" + id, "filename");
 
         // Construct the file path
-        String uploadFolder = System.getenv("MINIPILOT_ASSETS");
+        String uploadFolder = System.getenv("JPILOT_ASSETS");
         File file = new File(uploadFolder + File.separator + filename);
 
         // Delete the file
@@ -207,7 +206,7 @@ public class DataController {
         }
 
         // Remove the entry from the database
-        jedisPooled.del("minipilot:data:" + id);
+        jedisPooled.del("jpilot:data:" + id);
 
         // Redirect to the data page
         return new RedirectView("/data", true);
@@ -226,7 +225,7 @@ public class DataController {
     
     @GetMapping("/data/current/{name}")
     public RedirectView currentIndex(@PathVariable("name") String name, HttpServletRequest request, RedirectAttributes redirectAttributes) {
-    	jedisPooled.ftAliasUpdate("minipilot_rag_alias", name);
+    	jedisPooled.ftAliasUpdate("jpilot_rag_alias", name);
 
         // Redirect to the data page
         return new RedirectView("/data", true);

@@ -6,7 +6,7 @@
 		<form class="search-form mt-4 p-2 pl-4" method="post" action="">
 		    <div class="field has-addons">
 		        <div class="control is-expanded is-flex is-vcentered">
-		            <input name="q" autocomplete="off" class="search-bar" type="text" placeholder="Ask the MiniPilot a question...">
+		            <input name="q" autocomplete="off" class="search-bar" type="text" placeholder="Ask the jPilot a question...">
 		        </div>
 		        <div class="control has-icons-left">
 		            <button id="chat" disabled type="submit" class="button search-button" autocomplete="off">
@@ -26,21 +26,6 @@
 		        else {
 		            $("#chat").prop("disabled", true);
 		        }
-		    });
-		
-		    $("#reset").click(function(e){
-		        e.preventDefault();
-		        $.ajax({
-		            type: "POST",
-		            dataType: "json",
-		            url: "{{ url_for('minipilot_bp.reset')}}",
-		            processData: true,
-		            success: function(data) {
-		            $(".bubble-right, .bubble-left").fadeOut("slow", function() {
-		                $("#conversation").empty();
-		            });
-		            }
-		        });
 		    });
 		</script>
     </div>

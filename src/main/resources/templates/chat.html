@@ -1,7 +1,7 @@
 <!DOCTYPE HTML>
 <html xmlns:th="http://www.thymeleaf.org">
 <head> 
-    <title>Minipilot</title> 
+    <title>jPilot</title> 
     <link rel="shortcut icon" th:href="@{/images/favicon-32x32.png}" type="image/x-icon" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/notify/0.4.2/notify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js" integrity="sha512-LhccdVNGe2QMEfI3x4DVV3ckMRe36TfydKss6mJpdHjNFiV07dFpS2xzeZedptKZrwxfICJpez09iNioiSZ3hA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script th:src="@{/js/bubble.js}"></script>
-    <script th:src="@{/js/minipilot.js}"></script>
+    <script th:src="@{/js/jpilot.js}"></script>
 </head>
 <body>
     <div id="wrapper">
@@ -25,7 +25,7 @@
 				        <div class="column is-two-thirds is-full-mobile">
 				                <div class="bubble bubble-initial text-lg tracking-tight">
 				                    <p>
-				                        Hello! I am the MiniPilot, how can I help you?
+				                        Hello! I am the jPilot, how can I help you?
 				                    </p>
 				                </div>
 				            <span id="conversation">
@@ -41,7 +41,7 @@
 							<form class="search-form mt-4 p-2 pl-4" method="post" action="">
 							    <div class="field has-addons">
 							        <div class="control is-expanded is-flex is-vcentered">
-							            <input name="q" autocomplete="off" class="input " type="text" placeholder="Ask the MiniPilot a question...">
+							            <input name="q" autocomplete="off" class="input " type="text" placeholder="Ask the jPilot a question...">
 							        </div>
 							        <div class="control has-icons-left">
 							            <button id="chat" disabled type="submit" class="button search-button" autocomplete="off">

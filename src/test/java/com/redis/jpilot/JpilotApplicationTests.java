@@ -1,10 +1,10 @@
-package com.redis.minipilot;
+package com.redis.jpilot;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class MinipilotApplicationTests {
+class JpilotApplicationTests {
 
 	@Test
 	void contextLoads() {

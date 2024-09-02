@@ -1,4 +1,4 @@
-package com.redis.minipilot.controllers;
+package com.redis.jpilot.controllers;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,8 +23,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
-import com.redis.minipilot.MinipilotApplication;
-import com.redis.minipilot.core.SemanticCache;
+import com.redis.jpilot.JpilotApplication;
+import com.redis.jpilot.core.SemanticCache;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -75,13 +75,13 @@ public class ChatRestController {
     @Value("${redis.password}")
     private String password;
     
-    @Value("${minipilot.conversation.length}")
-    private long minipilotConversationLength;
+    @Value("${jpilot.conversation.length}")
+    private long jpilotConversationLength;
     
     private final JedisPooled jedisPooled;
     private final SemanticCache cache;
     
-    private static final Logger logger = LoggerFactory.getLogger(MinipilotApplication.class);
+    private static final Logger logger = LoggerFactory.getLogger(JpilotApplication.class);
     
     @Autowired
     public ChatRestController(JedisPooled jedisPooled, SemanticCache semanticCache) {
@@ -125,12 +125,12 @@ public class ChatRestController {
         // Check to what index the alias is pointing to
         String idx;
         try {
-        	Map<String, Object> idxAliasInfo = jedisPooled.ftInfo("minipilot_rag_alias");
+        	Map<String, Object> idxAliasInfo = jedisPooled.ftInfo("jpilot_rag_alias");
         	idx = (String) idxAliasInfo.get("index_name");
         }
 		catch (JedisDataException e) {
-			System.out.println("The minipilot_data_idx alias does not exist");
-			logger.warn("The minipilot_data_idx alias does not exist");
+			System.out.println("The jpilot_data_idx alias does not exist");
+			logger.warn("The jpilot_data_idx alias does not exist");
 			try {
 				emitter.send("You must associate the alias to an index");
 			} catch (IOException e1) {
@@ -180,8 +180,8 @@ public class ChatRestController {
 			emitter.send(cachedAnswer);
 			
 			// even if cached, add to user conversation
-    		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
-    		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(cachedAnswer));
+    		chatMemoryProvider.get("jpilot:history:" + request.getSession().getId()).add(userMessage(q));
+    		chatMemoryProvider.get("jpilot:history:" + request.getSession().getId()).add(aiMessage(cachedAnswer));
 			return emitter;
 		}
         
@@ -239,11 +239,11 @@ public class ChatRestController {
         */
         
         
-        String systemPrompt = jedisPooled.get("minipilot:prompt:system");
-        String userPrompt = jedisPooled.get("minipilot:prompt:user");
+        String systemPrompt = jedisPooled.get("jpilot:prompt:system");
+        String userPrompt = jedisPooled.get("jpilot:prompt:user");
         
         try {
-            TokenStream tokenStream = obj.chat(	"minipilot:memory:" + request.getSession().getId(), 
+            TokenStream tokenStream = obj.chat(	"jpilot:memory:" + request.getSession().getId(), 
             											systemPrompt,
             											userPrompt,
 									            		q);
@@ -271,8 +271,8 @@ public class ChatRestController {
             		// LangChain4j currently offers only "memory", not "history". If you need to keep an entire history, please do so manually.
             		// The memory comes with RAG context and without a separated field for the question, let's manage ourselves
             		String finalAnswer = chunks.toString();
-            		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(userMessage(q));
-            		chatMemoryProvider.get("minipilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));
+            		chatMemoryProvider.get("jpilot:history:" + request.getSession().getId()).add(userMessage(q));
+            		chatMemoryProvider.get("jpilot:history:" + request.getSession().getId()).add(aiMessage(finalAnswer));
             		
             		// Log all the conversations
                     Map<String, String> data = new HashMap<>();
@@ -281,7 +281,7 @@ public class ChatRestController {
                     data.put("answer", finalAnswer);
                     data.put("ttft", String.valueOf(ttft));
                     data.put("etfl", String.valueOf(etfl));
-                    jedisPooled.xadd("minipilot:conversation", data, XAddParams.xAddParams().maxLen(minipilotConversationLength));
+                    jedisPooled.xadd("jpilot:conversation", data, XAddParams.xAddParams().maxLen(jpilotConversationLength));
                     
                     // Add to semantic cache
                     cache.addToCache(q, finalAnswer);
@@ -331,8 +331,8 @@ public class ChatRestController {
         		.port(port)
         		.build();
 		
-        store.deleteMessages("minipilot:memory:" + request.getSession().getId());
-        store.deleteMessages("minipilot:history:" + request.getSession().getId());
+        store.deleteMessages("jpilot:memory:" + request.getSession().getId());
+        store.deleteMessages("jpilot:history:" + request.getSession().getId());
         
         // Return a JSON response
         Map<String, String> response = new HashMap<>();
@@ -391,7 +391,7 @@ class RedisSearchTools {
     }
 	
 	
-    // example FT.AGGREGATE minipilot_rag_imdb_movies_20240826_012558_idx * GROUPBY 0 REDUCE AVG 1 score AS avg_field
+    // example FT.AGGREGATE jpilot_rag_imdb_movies_20240826_012558_idx * GROUPBY 0 REDUCE AVG 1 score AS avg_field
 	@Tool("Calculate the average of the desired field")
 	public float average(String field) {
 		AggregationBuilder r = new AggregationBuilder("*");
@@ -412,7 +412,7 @@ class RedisSearchTools {
 	}
 	
 	
-	// example FT.SEARCH minipilot_rag_imdb_movies_20240826_012558_idx "@score:[80.0 +inf]" LIMIT 0 100 RETURN 1 $.names
+	// example FT.SEARCH jpilot_rag_imdb_movies_20240826_012558_idx "@score:[80.0 +inf]" LIMIT 0 100 RETURN 1 $.names
 	@Tool("Find entries having a field bigger than a certain value")
 	public List<Document> popular(
 			@P("The field name") String fieldName,

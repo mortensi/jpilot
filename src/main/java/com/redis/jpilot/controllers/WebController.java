@@ -1,4 +1,4 @@
-package com.redis.minipilot.controllers;
+package com.redis.jpilot.controllers;
 
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,7 +50,7 @@ public class WebController {
         		.build();
 
         
-        List<ChatMessage> messages = store.getMessages("minipilot:history:" + request.getSession().getId());
+        List<ChatMessage> messages = store.getMessages("jpilot:history:" + request.getSession().getId());
         
         ArrayList<Map<String, String>> messageList = new ArrayList<>();
         
@@ -77,7 +77,7 @@ public class WebController {
 	@GetMapping("/logger")
 	public String logger(Model model) {
 		
-		List<StreamEntry> entries = jedisPooled.xrange("minipilot:logging", "-", "+");
+		List<StreamEntry> entries = jedisPooled.xrange("jpilot:logging", "-", "+");
 		List<String> logs = new ArrayList<>();
 		
 		for (StreamEntry entry : entries) {

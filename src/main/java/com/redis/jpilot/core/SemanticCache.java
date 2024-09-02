@@ -1,4 +1,4 @@
-package com.redis.minipilot.core;
+package com.redis.jpilot.core;
 
 import java.util.HashMap;
 import java.util.List;
@@ -43,7 +43,7 @@ public class SemanticCache {
     public SemanticCache(JedisPooled jedisPooled) {
         this.jedisPooled = jedisPooled;
         
-        if (!jedisPooled.ftList().contains("minipilot_cache_idx")){
+        if (!jedisPooled.ftList().contains("jpilot_cache_idx")){
 	        Map<String, Object> attr = new HashMap<>();
 	        attr.put("TYPE", "FLOAT32");
 	        attr.put("DIM", 1536);
@@ -52,9 +52,9 @@ public class SemanticCache {
 	        Schema schema = new Schema().addHNSWVectorField("$.vector", attr).as("vector")
 	        							.addTextField("$.question", 1.0).as("question")
 	        							.addTextField("$.answer", 1.0).as("answer");
-	        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes("minipilot:cache");
-	        jedisPooled.ftCreate("minipilot_cache_idx", IndexOptions.defaultOptions().setDefinition(def), schema);
-	        System.out.println("minipilot_cache_idx created");
+	        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes("jpilot:cache");
+	        jedisPooled.ftCreate("jpilot_cache_idx", IndexOptions.defaultOptions().setDefinition(def), schema);
+	        System.out.println("jpilot_cache_idx created");
         }
         
         try {
@@ -77,7 +77,7 @@ public class SemanticCache {
     	                    limit(0,K).
     	                    dialect(2);
 
-    	List<Document> res = jedisPooled.ftSearch("minipilot_cache_idx", query).getDocuments();
+    	List<Document> res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
     	return res;
     }
     
@@ -92,7 +92,7 @@ public class SemanticCache {
     	                    limit(0,K).
     	                    dialect(2);
 
-    	List<Document> res = jedisPooled.ftSearch("minipilot_cache_idx", query).getDocuments();
+    	List<Document> res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
     	return res;
     }
     
@@ -104,7 +104,7 @@ public class SemanticCache {
         fields.put("vector", embeddingModel.embed(q).content().vector());
         
         AbstractTransaction tx = jedisPooled.multi();
-        String cacheEntryKey = String.format("minipilot:cache:%s", UUID.randomUUID().toString());
+        String cacheEntryKey = String.format("jpilot:cache:%s", UUID.randomUUID().toString());
         tx.jsonSetWithEscape(cacheEntryKey, Path2.of("$"), fields);
     	tx.expire(cacheEntryKey, 2628000);
     	tx.exec();
@@ -113,7 +113,7 @@ public class SemanticCache {
     
     
     public void flushCache() {
-    	jedisPooled.ftDropIndex("minipilot_cache_idx");
+    	jedisPooled.ftDropIndex("jpilot_cache_idx");
     	return;
     }
 

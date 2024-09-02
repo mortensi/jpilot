@@ -1,4 +1,4 @@
-package com.redis.minipilot.controllers;
+package com.redis.jpilot.controllers;
 
 
 import org.springframework.stereotype.Controller;
@@ -22,17 +22,17 @@ public class PromptController {
     
 	@GetMapping("/prompt")
 	public String prompt(@RequestParam(name="name", required=false, defaultValue="prompt") String name, Model model) {
-		model.addAttribute("system", jedisPooled.get("minipilot:prompt:system"));
-		model.addAttribute("user", jedisPooled.get("minipilot:prompt:user"));
+		model.addAttribute("system", jedisPooled.get("jpilot:prompt:system"));
+		model.addAttribute("user", jedisPooled.get("jpilot:prompt:user"));
 		return "prompt";
 	}
 	
     @PostMapping("/prompt/save")
     public String savePrompt(@RequestParam("prompt") String prompt, @RequestParam("type") String type) {
         if ("system".equals(type)) {
-        	jedisPooled.set("minipilot:prompt:system", prompt);
+        	jedisPooled.set("jpilot:prompt:system", prompt);
         } else if ("user".equals(type)) {
-        	jedisPooled.set("minipilot:prompt:user", prompt);
+        	jedisPooled.set("jpilot:prompt:user", prompt);
         }
 
         return "redirect:/prompt";  

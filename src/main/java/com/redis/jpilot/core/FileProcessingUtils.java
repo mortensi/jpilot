@@ -1,4 +1,4 @@
-package com.redis.minipilot.core;
+package com.redis.jpilot.core;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;

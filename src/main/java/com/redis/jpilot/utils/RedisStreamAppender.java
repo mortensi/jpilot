@@ -1,4 +1,4 @@
-package com.redis.minipilot.utils;
+package com.redis.jpilot.utils;
 
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -15,7 +15,7 @@ public class RedisStreamAppender extends AppenderBase<ILoggingEvent> {
 
     private JedisPooled jedisPooled;
 	
-    private String streamName = "minipilot:logging";
+    private String streamName = "jpilot:logging";
     private long maxStreamLength = 1000;
     
 

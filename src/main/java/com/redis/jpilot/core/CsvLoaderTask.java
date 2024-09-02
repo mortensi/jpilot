@@ -1,4 +1,4 @@
-package com.redis.minipilot.core;
+package com.redis.jpilot.core;
 
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
@@ -53,14 +53,14 @@ public class CsvLoaderTask {
     	
         // Check if alias exists for semantic search
         try {
-        	jedisPooled.ftInfo("minipilot_rag_alias");
+        	jedisPooled.ftInfo("jpilot_rag_alias");
         } catch (JedisDataException e) {
         	System.out.println("No alias exists for semantic search. Associate the alias to the desired index");
         }
 
         
         // Create a new index, named by CSV file and datetime
-        String indexName = "minipilot_rag_" + getFilenameWithoutExtension(filename) + "_" +
+        String indexName = "jpilot_rag_" + getFilenameWithoutExtension(filename) + "_" +
                 new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + "_idx";
 
 
@@ -121,7 +121,7 @@ public class CsvLoaderTask {
         							.addTagField("$.genre").as("genre")
         							.addNumericField("$.date_x").as("date_x")
         							.addNumericField("$.score").as("score");
-        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {String.format("minipilot:embedding:%s",indexName)});
+        IndexDefinition def = new IndexDefinition(Type.JSON).setPrefixes(new String[] {String.format("jpilot:embedding:%s",indexName)});
         jedisPooled.ftCreate(indexName, IndexOptions.defaultOptions().setDefinition(def), schema);
         
         
@@ -162,7 +162,7 @@ public class CsvLoaderTask {
                 fields.put("names", row.get("names"));
                 fields.put("genre", row.get("genre"));
                 fields.put("date_x", DateToUnixTimestamp(row.get("date_x")));
-                jedisPooled.jsonSetWithEscape(String.format("minipilot:embedding:%s:%s",indexName, UUID.randomUUID().toString()), Path2.of("$"), fields);
+                jedisPooled.jsonSetWithEscape(String.format("jpilot:embedding:%s:%s",indexName, UUID.randomUUID().toString()), Path2.of("$"), fields);
                 
                 // This is an example of ingestor with metadata, but unfortunately ingested metadata is only indexed as TEXT
                 // Document movieWithMetadata = createFromCSVLine(row, List.of("score"));

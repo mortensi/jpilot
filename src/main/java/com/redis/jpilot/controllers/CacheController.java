@@ -1,4 +1,4 @@
-package com.redis.minipilot.controllers;
+package com.redis.jpilot.controllers;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.view.RedirectView;
 
-import com.redis.minipilot.core.SemanticCache;
+import com.redis.jpilot.core.SemanticCache;
 
 import jakarta.servlet.http.HttpServletRequest;
 import redis.clients.jedis.JedisPooled;
@@ -59,7 +59,7 @@ public class CacheController {
     		String[] fields = {"answer", "question"};
     		q.returnFields(fields);
     		q.limit(0, 100);
-    		res = jedisPooled.ftSearch("minipilot_cache_idx", q).getDocuments();
+    		res = jedisPooled.ftSearch("jpilot_cache_idx", q).getDocuments();
     	}
     	else {
         	if (query.contentEquals("")) {
@@ -87,7 +87,7 @@ public class CacheController {
     
     @GetMapping("/cache/delete/{id}")
     public String deleteCache(@PathVariable("id") String id) {
-    	jedisPooled.del(String.format("minipilot:cache:%s", id));
+    	jedisPooled.del(String.format("jpilot:cache:%s", id));
     	return "redirect:/cache"; 
 	}
     
@@ -97,7 +97,7 @@ public class CacheController {
     								@RequestParam(name = "content", required = false) String content, 
     								HttpServletRequest request) {
     	if (id != null) {    	
-    		jedisPooled.jsonSetWithEscape(String.format("minipilot:cache:%s", id), Path2.of("$.answer"), content);
+    		jedisPooled.jsonSetWithEscape(String.format("jpilot:cache:%s", id), Path2.of("$.answer"), content);
     	
     	}
     	return new RedirectView(request.getHeader("Referer"));
