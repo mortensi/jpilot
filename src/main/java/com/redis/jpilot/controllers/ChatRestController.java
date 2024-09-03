@@ -214,7 +214,8 @@ public class ChatRestController {
         
         Assistant2 obj = assistant;
         
-        
+        // uncomment if you want to use tools
+        /*
         if (functionRequired.isFunctionRequired(q).toLowerCase().equals("true")) {
         	System.out.println("Tools are required");
         	
@@ -226,8 +227,10 @@ public class ChatRestController {
             
             obj = funcAssistant;
         } 
+        */
         
-       
+        
+        // Uncomment if you want to play with Redis commands generation
         /*
         Object schema = readIndexSchema(idx);
         System.out.println(schema);
