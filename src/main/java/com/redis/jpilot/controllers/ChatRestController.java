@@ -118,7 +118,8 @@ public class ChatRestController {
                 .logResponses(false)
                 .build();
         
-        // If I use an alias here, an index will be created with the alias name.
+        // This demo uses a Redis alias to point to the desired index (the association can be done from the UI)
+        // But if I use an alias here, an index will be created with the alias name.
         // That's a bug in isIndexExist https://github.com/langchain4j/langchain4j/blob/main/langchain4j-redis/src/main/java/dev/langchain4j/store/embedding/redis/RedisEmbeddingStore.java#L52
         // Should use ftInfo rather than ftList
         // For now, just dereference the alias to use the pointed index
@@ -175,6 +176,12 @@ public class ChatRestController {
                 .build();
         
 		List<Document> docs = cache.isInCache(q);
+		
+		if (docs == null) {
+			emitter.send("There was a problem connecting to the system. Retry later");
+			return emitter;
+		}
+		
 		if (!docs.isEmpty()) {
 			String cachedAnswer = (String) docs.get(0).get("$.answer");
 			emitter.send(cachedAnswer);
@@ -291,7 +298,6 @@ public class ChatRestController {
 
         } catch (Exception e) {
             emitter.completeWithError(e);  
-        	//emitter.send("Network issue, retry later");
         }
         
         return emitter;
@@ -305,9 +311,11 @@ public class ChatRestController {
     
     
     interface FunctionRequired {
-    	// String as a return types, does not append instructions to the end of UserMessage indicating the format in which the LLM should respond
     	// boolean appends "You must answer strictly in the following format: one of [true, false]" and may fail, as it return sometimes
     	// [true] rather than true, which is interpreted as false
+    	// So I decide to use String as a return types, so I can manipulate it. But the formatted output as String, 
+    	// does not append instructions to the end of UserMessage indicating the format in which the LLM should respond
+    	// this is why I am writing the formatting instructions myself
         @UserMessage("Is this question asking to calculate an average of the score, or searching a movie by genre? The question is: \"{{it}}\" Reply strictly with true or false")
         String isFunctionRequired(String text);
     }

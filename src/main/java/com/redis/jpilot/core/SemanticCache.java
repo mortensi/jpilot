@@ -5,9 +5,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import com.redis.jpilot.JpilotApplication;
 
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import redis.clients.jedis.AbstractTransaction;
@@ -39,6 +43,8 @@ public class SemanticCache {
     
     OpenAiEmbeddingModel embeddingModel = null;
     
+    private static final Logger logger = LoggerFactory.getLogger(JpilotApplication.class);
+    
     @Autowired
     public SemanticCache(JedisPooled jedisPooled) {
         this.jedisPooled = jedisPooled;
@@ -69,30 +75,58 @@ public class SemanticCache {
     
     public List<Document> isInCache(String q) {
     	int K = 1;
-    	Query query = new Query("@vector:[VECTOR_RANGE $radius $query_vector]=>{$YIELD_DISTANCE_AS: dist_field}").
+    	List<Document> res = null;
+    	Query query = null;
+    	
+    	try {
+    	query = new Query("@vector:[VECTOR_RANGE $radius $query_vector]=>{$YIELD_DISTANCE_AS: dist_field}").
     	                    addParam("radius", 0.1).
     	                    addParam("query_vector", toByteArray(embeddingModel.embed(q).content().vector())).
     	                    setSortBy("dist_field", true).
     	                    returnFields("$.answer").
     	                    limit(0,K).
     	                    dialect(2);
-
-    	List<Document> res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
+    	} catch (Exception e) {
+            logger.error("Cannot instantiate the embedding model");
+            return res;
+        }
+    	
+    	try {
+    		res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
+    	} catch (Exception e) {
+            logger.error("Cannot connect to the database");
+            return res;
+        }
+    	
     	return res;
     }
     
     
     public List<Document> semanticSearch(String q, int K) {
     	String[] fields = {"answer", "question"};
-    	Query query = new Query("@vector:[VECTOR_RANGE $radius $query_vector]=>{$YIELD_DISTANCE_AS: dist_field}").
-    	                    addParam("radius", 0.1).
-    	                    addParam("query_vector", toByteArray(embeddingModel.embed(q).content().vector())).
-    	                    setSortBy("dist_field", true).
-    	                    returnFields(fields).
-    	                    limit(0,K).
-    	                    dialect(2);
+    	List<Document> res = null;
+    	Query query = null;
+    	
+    	try {
+	    	query = new Query("@vector:[VECTOR_RANGE $radius $query_vector]=>{$YIELD_DISTANCE_AS: dist_field}").
+	    	                    addParam("radius", 0.1).
+	    	                    addParam("query_vector", toByteArray(embeddingModel.embed(q).content().vector())).
+	    	                    setSortBy("dist_field", true).
+	    	                    returnFields(fields).
+	    	                    limit(0,K).
+	    	                    dialect(2);
+		} catch (Exception e) {
+	        logger.error("Cannot instantiate the embedding model");
+	        return res;
+	    }
 
-    	List<Document> res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
+    	try {
+    		res = jedisPooled.ftSearch("jpilot_cache_idx", query).getDocuments();
+    	} catch (Exception e) {
+            logger.error("Cannot connect to the database");
+            return res;
+        }
+    	
     	return res;
     }
     

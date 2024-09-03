@@ -68,15 +68,16 @@ public class CacheController {
     		res = cache.semanticSearch(query, 100);
     	}
     	
-		for (Document document : res) {
-	        HashMap<String, String> entry = new HashMap<>();
-        	String[] parts = document.getId().split(":");
-        	entry.put("id", parts[parts.length - 1]);
-	        entry.put("question", document.get("question").toString());
-	        entry.put("answer", document.get("answer").toString());
-	        entries.add(entry);
-		}
-
+    	if (res != null) {
+    		for (Document document : res) {
+    	        HashMap<String, String> entry = new HashMap<>();
+            	String[] parts = document.getId().split(":");
+            	entry.put("id", parts[parts.length - 1]);
+    	        entry.put("question", document.get("question").toString());
+    	        entry.put("answer", document.get("answer").toString());
+    	        entries.add(entry);
+    		}
+    	}
     	
     	model.addAttribute("q", query);
     	model.addAttribute("s", searchType);
