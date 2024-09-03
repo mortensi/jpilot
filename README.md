@@ -16,7 +16,7 @@ From the browser UI you will be able to:
 ```
 export OPENAI_API_KEY=...
 export JPILOT_ASSETS=./assets
-export JAVA_HOME="/Library/Java/JavaVirtualMachines/jdk-22.jdk/Contents/Home/"
+export JAVA_HOME="/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/"
 ```
 
 
