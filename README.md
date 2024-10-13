@@ -27,9 +27,14 @@ git clone https://github.com/mortensi/jpilot
 cd jpilot
 
 mvn clean install
-mvn package
 
 mvn exec:java -Dexec.mainClass=com.redis.jpilot.JpilotApplication
-
 ```
 
+1. Now point your browser to [http://localhost:9090/data](http://localhost:9090/data).
+2. Import a CSV with your data. As an example, download the [IMDB movies dataset](https://www.kaggle.com/datasets/ashpalsingh1525/imdb-movies-dataset)
+3. Click on "create" to start reading the CSV file and create the index
+4. When done (it will take up to thirty minutes to import 10,000+ movies in the dataset), click on "Make current" to select the new index
+5. Start asking and review how the cache starts collecting questions.
+
+For a feature complete demo, try [Minipilot](https://github.com/redis/minipilot).
