@@ -1,0 +1,15 @@
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/JpilotApplication.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/controllers/CacheController.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/controllers/ChatRestController.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/controllers/DataController.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/controllers/PromptController.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/controllers/WebController.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/core/CsvLoaderTask.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/core/FileProcessingUtils.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/core/SemanticCache.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/core/SystemPromptDefault.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/core/UserPromptDefault.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/database/RedisConfig.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/utils/FileStorage.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/utils/RedisStreamAppender.java
+/Users/mortensi/workspace/jpilot/src/main/java/com/redis/jpilot/utils/SpringApplicationContext.java
